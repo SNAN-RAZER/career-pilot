@@ -218,3 +218,6 @@ class CareerKnowledgeStore:
         self.add_evidence(
             evidence
         )
+
+    def close(self):
+        self.client.close()

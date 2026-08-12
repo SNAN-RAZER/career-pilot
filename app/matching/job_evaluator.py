@@ -9,6 +9,11 @@ from app.models.job_evaluation import (
 )
 from app.profile.evidence_builder import EvidenceBuilder
 from app.matching.skill_ontology import SkillOntology
+from app.models.job import JobPosting
+from app.matching.job_analysis_input import (
+    build_job_analysis_input,
+)
+
 
 class JobEvaluator:
 
@@ -40,13 +45,25 @@ class JobEvaluator:
         )
 
     def evaluate(
-        self,
-        candidate: CandidateProfile,
-        job_description: str,
-    ) -> JobEvaluation:
+    self,
+    candidate: CandidateProfile,
+    job: JobPosting | str,
+) -> JobEvaluation:
+        if isinstance(job, str):
+            job = JobPosting(
+                job_id="legacy-evaluator-job",
+                title="Unknown",
+                company="Unknown",
+                location="",
+                description=job,
+                source="legacy",
+            )
+        job_analysis_input = (
+            build_job_analysis_input(job)
+        )
 
         requirements = self.analyzer.analyze(
-            job_description
+            job_analysis_input
         )
 
         evidence = self.evidence_builder.build(
