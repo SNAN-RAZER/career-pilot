@@ -1,0 +1,44 @@
+[project]
+name = "career-pilot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "SNAN-RAZER", email = "nayaabahmedn@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "docx2txt>=0.9",
+    "fastapi>=0.141.1",
+    "httpx>=0.28.1",
+    "langchain>=1.3.15",
+    "langchain-community>=0.4.2",
+    "langchain-core>=1.5.4",
+    "langchain-ollama>=1.1.0",
+    "langgraph>=1.2.11",
+    "lxml>=6.1.1",
+    "numpy>=2.5.2",
+    "pandas>=3.0.5",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.15.0",
+    "pypdf>=6.15.0",
+    "pytest>=9.1.1",
+    "python-docx>=1.2.0",
+    "python-dotenv>=1.2.2",
+    "qdrant-client>=1.19.0",
+    "requests>=2.34.2",
+    "tqdm>=4.70.0",
+    "uvicorn>=0.52.1",
+]
+
+[project.scripts]
+career-pilot = "career_pilot:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,0 +1,39 @@
+# Core
+python-dotenv
+pydantic
+pydantic-settings
+
+# HTTP
+requests
+httpx
+
+# AI / LangChain
+langchain
+langchain-core
+langchain-community
+langgraph
+langchain-ollama
+pydantic
+qdrant-client
+# Embeddings / Vector DB
+qdrant-client
+
+# Resume / Documents
+pypdf
+python-docx
+docx2txt
+
+# Data
+pandas
+
+# Web / API
+fastapi
+uvicorn
+
+# Utilities
+beautifulsoup4
+lxml
+tqdm
+
+# Testing
+pytest
