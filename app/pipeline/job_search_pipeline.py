@@ -137,6 +137,7 @@ class JobSearchPipeline:
                 self.target_matcher.match(
                     job,
                     target_profile,
+                    queries=queries,
                 )
             )
 
@@ -275,9 +276,11 @@ class JobSearchPipeline:
 
             evaluations.append(
                 (
+                    job.job_id,
                     job.title,
                     job.company,
                     evaluation,
+                    job.location,
                 )
             )
 

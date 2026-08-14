@@ -1,4 +1,5 @@
 from app.application.application_queue import ApplicationQueue
+from app.application.exceptions import ApplyBlocked
 from app.models.application_recommendation import (
     ApplicationRecommendation,
 )
@@ -11,9 +12,11 @@ class ApplicationWorkflow:
         self,
         queue: ApplicationQueue,
         store: ApplicationStore | None = None,
+        apply_agent=None,
     ):
         self.queue = queue
         self.store = store
+        self.apply_agent = apply_agent
 
     def _persist(
         self,
@@ -31,9 +34,6 @@ class ApplicationWorkflow:
         recommendation: ApplicationRecommendation,
     ):
 
-        if recommendation.next_action != "APPLY":
-            return None
-
         item = self.queue.add(
             recommendation
         )
@@ -44,6 +44,25 @@ class ApplicationWorkflow:
         self,
         job_id: str,
     ):
+
+        item = self.queue.get_by_job_id(job_id)
+
+        if item is None:
+            return None
+
+        if self.apply_agent is not None:
+            result = self.apply_agent.submit(
+                item
+            )
+
+            if not result.submitted:
+                raise ApplyBlocked(
+                    result.message
+                )
+
+            item.applied_via = result.mode
+            item.apply_message = result.message
+            item.notes.append(result.message)
 
         item = self.queue.update_status(
             job_id,
@@ -85,6 +104,23 @@ class ApplicationWorkflow:
             job_id,
             "REJECTED",
         )
+
+        return self._persist(item)
+
+    def tailor(
+        self,
+        job_id: str,
+        package,
+    ):
+
+        item = self.queue.get_by_job_id(job_id)
+
+        if item is None:
+            return None
+
+        item.tailored_resume = package.resume
+        item.ats = package.ats
+        item.resume_path = package.resume_path
 
         return self._persist(item)
 

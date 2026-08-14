@@ -42,9 +42,15 @@ class CandidateFitPreFilter:
         },
         "Embedded C": {
             "embedded c",
+            "embedded software",
+            "embedded systems",
+            "firmware",
         },
         "C": {
             "c programming",
+            "c/c++",
+            "c++",
+            "embedded c",
         },
         "VxWorks": {
             "vxworks",
@@ -226,6 +232,12 @@ class CandidateFitPreFilter:
             score = max(
                 score,
                 75,
+            )
+
+        if professional_matches >= 1:
+            score = max(
+                score,
+                55,
             )
 
         if professional_matches >= 3:

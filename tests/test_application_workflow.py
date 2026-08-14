@@ -62,7 +62,7 @@ def test_workflow_enqueues_apply_recommendation():
     assert result.status == "PENDING"
 
 
-def test_workflow_does_not_enqueue_rejected_recommendation():
+def test_workflow_enqueues_rejected_recommendation():
 
     queue = ApplicationQueue()
 
@@ -79,12 +79,16 @@ def test_workflow_does_not_enqueue_rejected_recommendation():
         recommendation
     )
 
-    assert result is None
+    assert result is not None
+    assert result.status == "PENDING"
+    assert (
+        result.recommendation.next_action
+        == "REJECT"
+    )
+    assert len(queue.get_all()) == 1
 
-    assert queue.get_all() == []
 
-
-def test_workflow_does_not_enqueue_review_recommendation():
+def test_workflow_enqueues_review_recommendation():
 
     queue = ApplicationQueue()
 
@@ -101,9 +105,9 @@ def test_workflow_does_not_enqueue_review_recommendation():
         recommendation
     )
 
-    assert result is None
+    assert result is not None
+    assert result.status == "PENDING"
 
-    assert queue.get_all() == []
 
 def test_workflow_applies_application():
 

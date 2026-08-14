@@ -6,6 +6,10 @@ from app.models.application_recommendation import (
 from app.models.application_record import (
     ApplicationRecord,
 )
+from app.models.tailored_resume import (
+    ATSResult,
+    TailoredResume,
+)
 
 
 class ApplicationQueueItem(BaseModel):
@@ -19,6 +23,16 @@ class ApplicationQueueItem(BaseModel):
     notes: list[str] = Field(
         default_factory=list
     )
+
+    tailored_resume: TailoredResume | None = None
+
+    ats: ATSResult | None = None
+
+    resume_path: str | None = None
+
+    applied_via: str | None = None
+
+    apply_message: str | None = None
 
     def to_application_record(
         self,
@@ -43,4 +57,9 @@ class ApplicationQueueItem(BaseModel):
                 self.recommendation.reasons
             ),
             notes=list(self.notes),
+            tailored_resume=self.tailored_resume,
+            ats=self.ats,
+            resume_path=self.resume_path,
+            applied_via=self.applied_via,
+            apply_message=self.apply_message,
         )

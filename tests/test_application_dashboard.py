@@ -118,7 +118,7 @@ def test_dashboard_returns_application_summary(
 
     assert summary.notes_count == 0
 
-    assert summary.next_action == "APPLY"
+    assert summary.next_action == "TAILOR"
 
 
 def test_dashboard_gets_application_by_job_id(

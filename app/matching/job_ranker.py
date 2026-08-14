@@ -13,7 +13,23 @@ class JobRanker:
 
         rankings = []
 
-        for title, company, evaluation in evaluations:
+        for item in evaluations:
+
+            location = None
+
+            if len(item) >= 5:
+                (
+                    job_id,
+                    title,
+                    company,
+                    evaluation,
+                    location,
+                ) = item[:5]
+            elif len(item) == 4:
+                job_id, title, company, evaluation = item
+            else:
+                title, company, evaluation = item
+                job_id = ""
 
             score = self._calculate_score(
                 evaluation
@@ -22,8 +38,10 @@ class JobRanker:
             rankings.append(
                 JobRanking(
                     rank=0,
+                    job_id=job_id,
                     title=title,
                     company=company,
+                    location=location,
                     score=round(
                         score,
                         2,

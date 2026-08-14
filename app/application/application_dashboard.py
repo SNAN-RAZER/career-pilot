@@ -1,6 +1,9 @@
 from app.application.application_service import (
     ApplicationService,
 )
+from app.application.company_apply import (
+    naukri_listing_url,
+)
 from app.models.application_summary import (
     ApplicationSummary,
 )
@@ -50,18 +53,19 @@ class ApplicationDashboard:
 
         job = application.job
 
-        next_action = (
-            "APPLY"
-            if application.status == "PENDING"
-            and application.recommendation == "APPLY"
-            else "WAIT"
-            if application.status == "APPLIED"
-            else "FOLLOW_UP"
-            if application.status == "INTERVIEW"
-            else "NEGOTIATE"
-            if application.status == "OFFER"
-            else "CLOSED"
-        )
+        if application.status == "PENDING":
+            if application.tailored_resume is None:
+                next_action = "TAILOR"
+            else:
+                next_action = "APPLY"
+        elif application.status == "APPLIED":
+            next_action = "WAIT"
+        elif application.status == "INTERVIEW":
+            next_action = "FOLLOW_UP"
+        elif application.status == "OFFER":
+            next_action = "NEGOTIATE"
+        else:
+            next_action = "CLOSED"
 
         return ApplicationSummary(
             job_id=job.job_id,
@@ -82,4 +86,31 @@ class ApplicationDashboard:
             reasons=application.reasons,
             notes_count=len(application.notes),
             next_action=next_action,
+            ats_score=(
+                application.ats.score
+                if application.ats
+                else None
+            ),
+            ats_passed=(
+                application.ats.passed
+                if application.ats
+                else None
+            ),
+            resume_path=application.resume_path,
+            tailored_summary=(
+                application.tailored_resume.summary
+                if application.tailored_resume
+                else None
+            ),
+            tailored_skills=(
+                application.tailored_resume.skills
+                if application.tailored_resume
+                else []
+            ),
+            source=job.source,
+            url=naukri_listing_url(job),
+            applied_via=application.applied_via,
+            apply_message=(
+                application.apply_message
+            ),
         )

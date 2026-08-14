@@ -119,3 +119,29 @@ class NaukriAdapter:
                 "salary_raw": job.salary,
             },
         )
+
+    @staticmethod
+    def to_naukri_job(posting: JobPosting):
+
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            job_id=posting.job_id,
+            title=posting.title,
+            company=posting.company,
+            location=posting.location or "",
+            experience=str(
+                posting.raw_data.get(
+                    "experience",
+                    "",
+                )
+            ),
+            salary=posting.salary or "",
+            posted_date=posting.posted_date or "",
+            apply_link=posting.url or "",
+            description=posting.description,
+            tags=list(
+                posting.raw_data.get("tags")
+                or []
+            ),
+        )

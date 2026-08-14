@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ApplicationSummary(BaseModel):
@@ -21,3 +21,23 @@ class ApplicationSummary(BaseModel):
     notes_count: int
 
     next_action: str
+
+    ats_score: float | None = None
+
+    ats_passed: bool | None = None
+
+    resume_path: str | None = None
+
+    tailored_summary: str | None = None
+
+    tailored_skills: list[str] = Field(
+        default_factory=list
+    )
+
+    source: str | None = None
+
+    url: str | None = None
+
+    applied_via: str | None = None
+
+    apply_message: str | None = None

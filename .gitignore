@@ -10,3 +10,5 @@ wheels/
 .venv
 .env
 data/applications.json
+data/resumes/
+third_party/NopeRi/

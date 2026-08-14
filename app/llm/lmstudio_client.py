@@ -46,12 +46,17 @@ class LMStudioClient:
     messages: list[dict[str, str]],
     temperature: float = 0.1,
     response_schema: dict | None = None,
+    max_tokens: int = 3000,
     ) -> str:
 
         payload = {
             "model": self.llm_model,
             "messages": messages,
             "temperature": temperature,
+            "top_p": 0.95,
+            "max_tokens": max_tokens,
+            "tool_choice": "none",
+            "tools": [],
         }
 
         if response_schema is not None:

@@ -25,6 +25,7 @@ def make_profile():
             "AI Engineer",
             "Generative AI Engineer",
             "RAG Engineer",
+            "Avionics Software Engineer",
         ],
 
         excluded_roles=[
@@ -35,8 +36,33 @@ def make_profile():
             "AI",
             "Generative AI",
             "RAG",
+            "Avionics",
+            "Aerospace",
         ],
     )
+
+
+def test_firmware_title_is_target_match():
+
+    matcher = TargetMatcher()
+
+    profile = TargetProfile(
+        target_roles=[
+            "Embedded Software Engineer",
+            "RTOS Engineer",
+        ],
+        target_domains=[
+            "Embedded Systems",
+        ],
+    )
+
+    result = matcher.match(
+        make_job("Firmware Engineer"),
+        profile,
+        queries=["Firmware Engineer"],
+    )
+
+    assert result.matched is True
 
 
 def test_target_ai_engineer():
@@ -93,3 +119,110 @@ def test_ai_domain_fallback():
 
     assert result.matched is True
     assert result.score == 70.0
+
+
+def test_genai_does_not_match_ai_engineer_substring():
+
+    matcher = TargetMatcher()
+
+    result = matcher.match(
+        make_job("GenAi Engineer"),
+        make_profile(),
+        queries=["Avionics Software Engineer"],
+    )
+
+    assert result.matched is False
+
+
+def test_technician_is_rejected():
+
+    matcher = TargetMatcher()
+
+    result = matcher.match(
+        make_job(
+            "Electrical technician",
+            "Avionics CAN UART Ethernet",
+        ),
+        make_profile(),
+        queries=["Avionics Software Engineer"],
+    )
+
+    assert result.matched is False
+
+
+def test_ada_query_does_not_match_radar_job():
+
+    matcher = TargetMatcher()
+
+    result = matcher.match(
+        make_job(
+            "Automotive - AI Engineer",
+            "Computer vision, YOLO, radar and "
+            "semantic segmentation.",
+        ),
+        make_profile(),
+        queries=["Ada"],
+    )
+
+    assert result.matched is False
+
+
+def test_ada_query_matches_ada95_job():
+
+    matcher = TargetMatcher()
+
+    result = matcher.match(
+        make_job(
+            "Embedded Software Engineer",
+            "Develop avionics software using Ada95 "
+            "and VxWorks.",
+        ),
+        make_profile(),
+        queries=["Ada"],
+    )
+
+    assert result.matched is True
+
+
+def test_ai_engineer_query_does_not_match_edge_ai_title():
+
+    matcher = TargetMatcher()
+
+    result = matcher.match(
+        make_job(
+            "C++ Quantization Engineer - Edge AI"
+        ),
+        make_profile(),
+        queries=["AI Engineer"],
+    )
+
+    assert result.matched is False
+
+
+def test_customer_care_title_is_rejected():
+
+    matcher = TargetMatcher()
+
+    result = matcher.match(
+        make_job("Customer Care Executive"),
+        make_profile(),
+        queries=["RTOS"],
+    )
+
+    assert result.matched is False
+
+
+def test_rtos_query_matches_firmware_title():
+
+    matcher = TargetMatcher()
+
+    result = matcher.match(
+        make_job(
+            "Firmware Engineer",
+            "Develop drivers on an RTOS and UART.",
+        ),
+        make_profile(),
+        queries=["RTOS"],
+    )
+
+    assert result.matched is True

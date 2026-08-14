@@ -177,3 +177,104 @@ def test_invalid_application_transition():
         "Invalid application status transition: "
         "PENDING -> OFFER"
     )
+
+
+def test_tailor_application_resume():
+
+    dependencies = (
+        application_dependencies
+    )
+
+    from app.models.application_recommendation import (
+        ApplicationRecommendation,
+    )
+    from app.models.job import JobPosting
+
+    job_id = f"api-test-tailor-{uuid4().hex}"
+
+    job = JobPosting(
+        job_id=job_id,
+        title="AI Engineer",
+        company="API Test Company",
+        location="Bangalore",
+        description="Python RAG LLM LangChain",
+        source="test",
+    )
+
+    recommendation = (
+        ApplicationRecommendation(
+            job=job,
+            match_score=90.0,
+            eligibility_score=88.0,
+            recommendation="APPLY",
+            missing_requirements=[],
+            reasons=["Strong match."],
+            next_action="APPLY",
+        )
+    )
+
+    dependencies.workflow.enqueue(
+        recommendation
+    )
+
+    response = client.post(
+        f"/applications/{job_id}/tailor"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["ats_score"] is not None
+    assert data["tailored_summary"]
+    assert "Python" in data["tailored_skills"]
+    assert data["resume_path"]
+
+
+def test_naukri_apply_blocked_without_resume():
+
+    dependencies = (
+        application_dependencies
+    )
+
+    from app.models.application_recommendation import (
+        ApplicationRecommendation,
+    )
+    from app.models.job import JobPosting
+
+    job_id = f"api-test-naukri-{uuid4().hex}"
+
+    job = JobPosting(
+        job_id=job_id,
+        title="AI Engineer",
+        company="Naukri Co",
+        location="Bangalore",
+        description="Python RAG LLM",
+        source="naukri",
+    )
+
+    recommendation = (
+        ApplicationRecommendation(
+            job=job,
+            match_score=90.0,
+            eligibility_score=88.0,
+            recommendation="APPLY",
+            missing_requirements=[],
+            reasons=["Strong match."],
+            next_action="APPLY",
+        )
+    )
+
+    dependencies.workflow.enqueue(
+        recommendation
+    )
+
+    response = client.post(
+        f"/applications/{job_id}/apply"
+    )
+
+    assert response.status_code == 400
+
+    assert "Tailor a resume" in (
+        response.json()["detail"]
+    )

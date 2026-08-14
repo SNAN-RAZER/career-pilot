@@ -14,35 +14,34 @@
     "RAG Engineer",
     "LLM Engineer"
   ],
-  "total_experience_years": 4,
+  "excluded_roles": [
+    "AI Research Scientist",
+    "Research Scientist",
+    "Machine Learning Researcher"
+  ],
+  "total_experience_years": 4.0,
   "professional_summary": "Software developer with professional experience in embedded software, aerospace and avionics systems, RTOS development, software testing and automation, with additional experience in Python, web development and AI/RAG projects.",
   "skills": [
     "C",
-    "Embedded C",
-    "Ada95",
-    "VxWorks",
-    "RTOS",
     "Python",
     "JavaScript",
     "HTML",
     "CSS",
-    "Node.js",
-    "React",
-    "MongoDB",
+    "Node",
     "Git",
-    "GitHub",
-    "Docker",
-    "Unit Testing",
-    "LDRA",
-    "Eclipse RT",
-    "RT Tester",
-    "IBM DOORS",
-    "LangChain",
-    "LangGraph",
-    "RAG",
-    "Ollama",
-    "Qdrant",
-    "LLM"
+    "Node.js",
+    "Jenkins",
+    "TeamCity",
+    "Octopus Deploy",
+    "Sublime",
+    "merge",
+    "Tortoise Git",
+    "RTOS",
+    "Anaconda",
+    "VSCode",
+    "HCL One Test Embedded studio",
+    "IBM RT-RT",
+    "LDRA"
   ],
   "domains": [
     "Embedded Systems",
@@ -65,96 +64,55 @@
         "Conduct integration testing using LDRA to ensure software components meet functional and safety requirements.",
         "Perform Hardware-Software Integration (HSI) testing utilizing Eclipse RT and RT Tester to validate system behavior in real-time environments.",
         "Responsible for authoring and maintaining test documentation based on requirements traced through IBM DOORS.",
+        "Ensure software is developed in alignment with defined functional and technical requirements.",
         "Perform thorough requirement-to-code traceability analysis to verify that each implemented feature meets the specified customer needs.",
         "Collaborate with cross-functional teams to ensure consistency, compliance, and high standards in code quality and testing processes."
       ],
-      "technologies": [
-        "LDRA",
-        "Eclipse RT",
-        "RT Tester",
-        "IBM DOORS",
-        "Python",
-        "Git",
-        "Docker"
-      ],
-      "domains": [
-        "Embedded Systems",
-        "Avionics",
-        "Software Testing",
-        "Automation"
-      ]
+      "technologies": [],
+      "domains": []
     },
     {
       "company": "Aeronautical Development Agency",
-      "role": "Embedded Software Engineer",
+      "role": "Software Developer",
       "start_date": "2022-12",
       "end_date": "2024-02",
       "description": [
         "Actively involved in the development and maintenance of mission critical software solutions for embedded systems.",
         "Utilized pragma calls to establish seamless communication and integration between Ada and VxWorks, ensuring optimal performance and reliability.",
-        "Employed Git for robust source control management, overseeing versioning and collaborative development for both application and VxWorks projects.",
-        "Actively engaged in DevOps practices, focusing on automated builds and delivery pipelines to target environments.",
-        "Conducted thorough unit testing and debugging activities, ensuring the reliability and stability of mission computer applications.",
-        "Used Python to develop descriptive change notice generation directly using git diff files to maintain a clean documentation setup.",
-        "Built a basic interface to monitor mission computer health status (temperature, uptime) using HTML, CSS, JavaScript, and Node.js."
+        "Employed Git for robust source control management, overseeing versioning and collaborative development for both application and VxWorks projects, this increased our productivity by 50%.",
+        "Actively engaged in DevOps practices, focusing on automated builds and delivery pipelines to target environments, resulting in streamlined development processes and increased efficiency.",
+        "Collaborated with cross-functional teams to analyze system requirements, troubleshoot issues, and optimize software performance.",
+        "Conducted thorough unit testing and debugging activities, ensuring the reliability and stability of mission computer application.",
+        "Used Python to help develop Descriptive change notice generation by directly using git diff file, this helped our team to keep a clean documentation setup hence increasing our productivity by 200%.",
+        "Successfully made a basic interface to monitor Mission computer health status like temperature, uptime ... etc.  using HTML, CSS, JavaScript and NodeJS using APIs provided by Mission computer."
       ],
-      "technologies": [
-        "Ada95",
-        "Embedded C",
-        "VxWorks",
-        "RTOS",
-        "Python",
-        "JavaScript",
-        "HTML",
-        "CSS",
-        "Node.js",
-        "Git",
-        "Unit Testing"
-      ],
-      "domains": [
-        "Aerospace",
-        "Avionics",
-        "Embedded Systems",
-        "RTOS",
-        "Safety Critical Software"
-      ]
+      "technologies": [],
+      "domains": []
     },
     {
       "company": "Amazon Development Centre (India) Pvt. Ltd",
-      "role": "Process Associate (Semi-Tech)",
+      "role": "PROCESS ASSOCIATE (SEMI-TECH)",
       "start_date": "2019-12",
       "end_date": "2021-06",
       "description": [
         "Provide proper product pricing to US customers using in-house tools.",
-        "Analyze price changes and suggest ways to keep product pricing competitive.",
-        "Create dashboards using Matplotlib with given CSV data.",
-        "Submit new ideas for the improvement of in-house tools."
+        "Analyze the price changes and suggest ways to keep pricing of products competent.",
+        "Create dashboards using Matplotlib with the given CSV data.",
+        "Submit new Ideas for the improvement of in-house tools."
       ],
-      "technologies": [
-        "Python",
-        "Matplotlib"
-      ],
-      "domains": [
-        "Data Analysis",
-        "Operations Automation"
-      ]
+      "technologies": [],
+      "domains": []
     },
     {
-      "company": "Protocol Automation Technologies Pvt. Ltd",
-      "role": "SCADA Developer",
+      "company": "Protocol Automation Technologies Pvt. Ltd.",
+      "role": "SCADA DEVELOPER",
       "start_date": "2018-12",
       "end_date": "2019-05",
       "description": [
         "Design efficient SCADA designs using Movicon."
       ],
-      "technologies": [
-        "Movicon",
-        "SCADA"
-      ],
-      "domains": [
-        "Industrial Automation",
-        "SCADA"
-      ]
+      "technologies": [],
+      "domains": []
     }
   ],
   "projects": [
@@ -179,8 +137,9 @@
   ],
   "education": [
     {
-      "degree": "Bachelor of Engineering in Electrical and Electronics Engineering",
-      "institution": "Sai Vidya Institute of Technology"
+      "degree": "Bachelor of Engineering, Electrical and Electronics Engineering– 6.67 %",
+      "institution": "Sai Vidya Institute of Technology, Bengaluru",
+      "year": "2018"
     }
   ],
   "certifications": [],
@@ -191,5 +150,7 @@
     "Chennai",
     "Remote"
   ],
-  "remote_preference": "preferred"
+  "remote_preference": "preferred",
+  "linkedin": null,
+  "github": null
 }

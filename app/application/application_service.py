@@ -95,3 +95,14 @@ class ApplicationService:
             job_id,
             note,
         )
+
+    def tailor(
+        self,
+        job_id: str,
+        package,
+    ) -> ApplicationQueueItem | None:
+
+        return self.workflow.tailor(
+            job_id,
+            package,
+        )

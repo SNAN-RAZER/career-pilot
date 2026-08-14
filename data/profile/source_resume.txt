@@ -1,0 +1,73 @@
+Nayaab Ahmed N  
+Github • nayaabahmedn@gmail.com • LinkedIn   
+ Phone • 8197718054  
+  
+PROFESSIONAL EXPERIENCE  
+ 
+ Cyient Limited 
+ Software Developer May 2024 –   present   
+• Conduct integration testing using LDRA to ensure software components meet functional and 
+safety requirements. 
+• Perform Hardware-Software Integration (HSI) testing utilizing Eclipse RT and RT Tester to validate 
+system behavior in real-time environments. 
+• Responsible for authoring and maintaining test documentation based on requirements traced 
+through IBM DOORS. 
+• Ensure software is developed in alignment with defined functional and technical requirements. 
+• Perform thorough requirement-to-code traceability analysis to verify that each implemented 
+feature meets the specified customer needs. 
+• Collaborate with cross-functional teams to ensure consistency, compliance, and high standards in 
+code quality and testing processes.  
+Aeronautical Development Agency    
+Software Developer Dec 2022 – Feb 2024  
+● Actively involved in the development and maintenance of mission critical software solutions for 
+embedded systems.  
+● Utilized pragma calls to establish seamless communication and integration between Ada and 
+VxWorks, ensuring optimal performance and reliability.  
+● Employed Git for robust source control management, overseeing versioning and collaborative 
+development for both application and VxWorks projects, this increased our productivity by 50%.  
+● Actively engaged in DevOps practices, focusing on automated builds and delivery pipelines to 
+target environments, resulting in streamlined development processes and increased efficiency.  
+● Collaborated with cross-functional teams to analyze system requirements, troubleshoot issues, 
+and optimize software performance.  
+● Conducted thorough unit testing and debugging activities, ensuring the reliability and stability of 
+mission computer application.  
+● Used Python to help develop Descriptive change notice generation by directly using git diff file, 
+this helped our team to keep a clean documentation setup hence increasing our productivity by 
+200%.  
+● Successfully made a basic interface to monitor Mission computer health status like temperature, 
+uptime ... etc.  using HTML, CSS, JavaScript and NodeJS using APIs provided by Mission 
+computer.  
+Amazon Development Centre (India) Pvt. Ltd    
+PROCESS ASSOCIATE (SEMI-TECH) Dec 2019 – June 2021  
+● Provide proper product pricing to US customers using in-house tools.  
+● Analyze the price changes and suggest ways to keep pricing of products competent.  
+● Create dashboards using Matplotlib with the given CSV data.  
+● Submit new Ideas for the improvement of in-house tools.  
+Protocol Automation Technologies Pvt. Ltd.    
+SCADA DEVELOPER Dec 2018 – May 2019  
+● Design efficient SCADA designs using Movicon.  
+EDUCATION  
+ 
+Sai Vidya Institute of Technology, Bengaluru  2014-2018  
+  
+Bachelor of Engineering, Electrical and Electronics Engineering– 6.67 %  
+Indiranagar Composite PU college, Bengaluru  
+ PCMB – 88.87%  
+ 
+  
+ 
+TECHNICAL SKILLS  
+ 
+● Programming Languages: C, Python, JavaScript, HTML, CSS, Node.  
+● Technologies/Frameworks: Git, Node.js, Jenkins, TeamCity, Octopus Deploy, Sublime 
+merge, Tortoise Git, RTOS.  
+● Development Tools: Anaconda and VSCode  
+● Testing Tools: HCL One Test Embedded studio, IBM RT-RT and LDRA.  
+  
+  
+ADDITIONAL INFORMATION  
+ 
+● Languages: English (Professional), Kannada, Hindi (Native)  
+●   Interests: Badminton, Meditating.   
+● Certification: Full stack developer from GUVI.  
+  

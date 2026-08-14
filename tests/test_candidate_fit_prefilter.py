@@ -77,6 +77,28 @@ def make_job(
     )
 
 
+def test_typical_embedded_job_is_good_fit():
+
+    candidate = make_candidate()
+
+    job = make_job(
+        "Firmware Engineer",
+        """
+        Develop firmware using C/C++ and RTOS
+        on microcontrollers.
+        """,
+    )
+
+    matcher = CandidateFitPreFilter()
+
+    result = matcher.match(
+        candidate,
+        job,
+    )
+
+    assert result.matched is True
+
+
 def test_ai_rag_job_is_good_candidate_fit():
 
     candidate = make_candidate()

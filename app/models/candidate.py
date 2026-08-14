@@ -29,7 +29,12 @@ class Education(BaseModel):
 class CandidateProfile(BaseModel):
     name: str
 
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
     target_roles: List[str] = Field(default_factory=list)
+
+    excluded_roles: List[str] = Field(default_factory=list)
 
     total_experience_years: float = 0
 
@@ -50,3 +55,7 @@ class CandidateProfile(BaseModel):
     preferred_locations: List[str] = Field(default_factory=list)
 
     remote_preference: Optional[str] = None
+
+    linkedin: Optional[str] = None
+
+    github: Optional[str] = None

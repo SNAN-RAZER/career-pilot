@@ -214,6 +214,19 @@ class ApplicationQueue:
             existing.notes = list(
                 application.notes
             )
+            existing.tailored_resume = (
+                application.tailored_resume
+            )
+            existing.ats = application.ats
+            existing.resume_path = (
+                application.resume_path
+            )
+            existing.applied_via = (
+                application.applied_via
+            )
+            existing.apply_message = (
+                application.apply_message
+            )
 
             return existing
 
@@ -247,6 +260,13 @@ class ApplicationQueue:
             recommendation=recommendation,
             status=application.status,
             notes=list(application.notes),
+            tailored_resume=(
+                application.tailored_resume
+            ),
+            ats=application.ats,
+            resume_path=application.resume_path,
+            applied_via=application.applied_via,
+            apply_message=application.apply_message,
         )
 
         self._items.append(item)
