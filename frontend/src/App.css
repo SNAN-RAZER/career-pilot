@@ -121,12 +121,9 @@ select {
   letter-spacing: -0.02em;
 }
 
-.section-header p {
-  margin: 6px 0 0;
-  color: #667085;
-  font-size: 13px;
-  line-height: 1.45;
-  max-width: 52ch;
+.section-header .application-actions {
+  margin-top: 0;
+  justify-content: flex-end;
 }
 
 .search-form {

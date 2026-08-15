@@ -159,10 +159,19 @@ def store_parsed_profile():
     facts = json.loads(
         PREVIEW_PATH.read_text(encoding="utf-8")
     )
+    source = PROFILE_DIR / f"{SOURCE_STEM}.txt"
+    ingestor = ResumeIngestor()
+
+    if source.exists():
+        facts = ingestor._fill_contact(
+            facts,
+            source.read_text(encoding="utf-8"),
+        )
+
     existing = _load_profile()
 
     try:
-        profile = ResumeIngestor().to_profile(
+        profile = ingestor.to_profile(
             facts,
             existing,
         )

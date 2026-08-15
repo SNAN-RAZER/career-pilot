@@ -6,7 +6,9 @@ from app.models.candidate import (
     CandidateProfile,
     Education,
     Experience,
+    Project,
 )
+from app.profile.resume_parse_agent import ResumeParseAgent
 from app.resume.source_document import extract_contact
 
 
@@ -53,8 +55,19 @@ DATE_RANGE_RE = re.compile(
 SECTION_RE = re.compile(
     r"^(professional\s+experience|work\s+experience|"
     r"experience|education|technical\s+skills|"
-    r"skills|additional\s+information|projects|"
-    r"certifications)\s*$",
+    r"skills|additional\s+information|"
+    r"projects?|ai\s*/.+\bproject\b|"
+    r"certifications?|languages)\s*$",
+    re.I,
+)
+
+BULLET_RE = re.compile(
+    r"^[\u2022\u25cf\u25a0\u25e6\u2013\u2014\-\*\uf0b7]\s*",
+)
+
+ROLE_HINT_RE = re.compile(
+    r"\b(engineer|developer|associate|analyst|intern|"
+    r"consultant|manager|scientist|specialist)\b",
     re.I,
 )
 
@@ -69,12 +82,17 @@ VALID_FACT_KEYS = {
     "phone",
     "location",
     "linkedin",
-    "github",
-    "skills",
-    "experience",
-    "education",
-    "summary",
-}
+            "github",
+            "headline",
+            "skills",
+            "experience",
+            "education",
+            "summary",
+            "certifications",
+            "languages",
+            "interests",
+            "projects",
+        }
 
 
 class ResumeIngestor:
@@ -84,23 +102,19 @@ class ResumeIngestor:
         llm: LMStudioClient | None = None,
     ):
         self.llm = llm or LMStudioClient()
+        self.agent = ResumeParseAgent(self.llm)
 
     def parse_text(self, text: str) -> dict:
 
-        heuristic = self._heuristic_parse(text)
         extracted = self._llm_extract(text)
 
-        if extracted:
-            facts = self._merge_facts(heuristic, extracted)
-        else:
-            facts = heuristic
+        if extracted and ResumeParseAgent._usable(extracted):
+            return self._fill_contact(extracted, text)
 
-        if not facts.get("name") or FAKE_NAME_RE.match(
-            str(facts.get("name") or "")
-        ):
-            facts["name"] = self._guess_name(text)
+        if extracted is None:
+            return self._heuristic_parse(text)
 
-        return facts
+        return self._fill_contact(extracted, text)
 
     def to_profile(
         self,
@@ -127,14 +141,67 @@ class ResumeIngestor:
                     item.get("technologies") or []
                 ),
             )
-            for item in facts.get("experience") or []
-            if isinstance(item, dict)
-            and (
-                item.get("company")
-                or item.get("title")
-                or item.get("role")
+            for item in (
+                ResumeParseAgent._repair_job(
+                    {
+                        "company": str(
+                            item.get("company") or ""
+                        ),
+                        "title": str(
+                            item.get("title")
+                            or item.get("role")
+                            or ""
+                        ),
+                        "start_date": item.get("start_date")
+                        or "",
+                        "end_date": item.get("end_date")
+                        or "",
+                        "bullets": list(
+                            item.get("bullets")
+                            or item.get("description")
+                            or []
+                        ),
+                    }
+                )
+                for item in facts.get("experience") or []
+                if isinstance(item, dict)
             )
+            if item.get("company") or item.get("title")
         ]
+        experiences = [
+            item
+            for item in experiences
+            if not ResumeIngestor._is_bullet(item.company)
+            and not ResumeIngestor._is_bullet(item.role)
+            and len(item.company) < 80
+        ]
+
+        projects = []
+
+        for item in facts.get("projects") or []:
+            if not isinstance(item, dict):
+                continue
+
+            bullets = item.get("bullets") or []
+            description = item.get("description") or ""
+
+            if isinstance(description, list):
+                bullets = description
+                description = ""
+
+            projects.append(
+                Project(
+                    name=str(item.get("name") or "Project"),
+                    description=(
+                        " ".join(bullets)
+                        if bullets
+                        else str(description)
+                    ),
+                    technologies=list(
+                        item.get("technologies") or []
+                    ),
+                )
+            )
 
         education = [
             Education(
@@ -161,17 +228,38 @@ class ResumeIngestor:
         ]
 
         location = str(facts.get("location") or "")
+
+        if re.search(
+            r"engineer|python|embedded|automation",
+            location,
+            re.I,
+        ):
+            location = ""
+
         preferred = (
             [location]
             if location
-            else list(
-                existing.preferred_locations
-                if existing
-                else []
-            )
+            else [
+                item
+                for item in (
+                    existing.preferred_locations
+                    if existing
+                    else []
+                )
+                if not re.search(
+                    r"engineer|python|embedded|automation",
+                    item,
+                    re.I,
+                )
+            ]
         )
 
         base = existing.model_dump() if existing else {}
+
+        headline = facts.get("headline") or base.get("headline") or ""
+
+        if re.search(r"cgpa|pcmb|institute|college", headline, re.I):
+            headline = ""
 
         base.update(
             {
@@ -182,6 +270,13 @@ class ResumeIngestor:
                 or base.get("linkedin"),
                 "github": facts.get("github")
                 or base.get("github"),
+                "headline": headline,
+                "languages": facts.get("languages")
+                or base.get("languages")
+                or [],
+                "interests": facts.get("interests")
+                or base.get("interests")
+                or [],
                 "skills": facts.get("skills")
                 or base.get("skills")
                 or [],
@@ -197,15 +292,26 @@ class ResumeIngestor:
                 ]
                 or base.get("education")
                 or [],
+                "projects": [
+                    item.model_dump()
+                    for item in projects
+                ]
+                or base.get("projects")
+                or [],
                 "preferred_locations": preferred
                 or base.get("preferred_locations")
                 or [],
             }
         )
 
-        if not base.get("professional_summary"):
-            base["professional_summary"] = (
-                facts.get("summary") or ""
+        if facts.get("summary"):
+            base["professional_summary"] = facts["summary"]
+        elif not base.get("professional_summary"):
+            base["professional_summary"] = ""
+
+        if facts.get("certifications"):
+            base["certifications"] = list(
+                facts["certifications"]
             )
 
         if not base.get("name"):
@@ -227,9 +333,23 @@ class ResumeIngestor:
             }
         )
         facts["name"] = self._guess_name(text)
+        extra = self._parse_extra(text)
+        facts.update(
+            {
+                key: value
+                for key, value in extra.items()
+                if value
+            }
+        )
         sections = self._split_sections(text)
-        facts["experience"] = self._parse_experience(
-            sections.get("experience", "")
+        facts["experience"] = [
+            ResumeParseAgent._repair_job(job)
+            for job in self._parse_experience(
+                sections.get("experience", "")
+            )
+        ]
+        facts["projects"] = self._parse_projects(
+            sections.get("projects", "")
         )
         facts["education"] = self._parse_education(
             sections.get("education", "")
@@ -238,57 +358,82 @@ class ResumeIngestor:
             sections.get("skills", "")
             or text
         )
+        facts["certifications"] = self._parse_certs(
+            sections.get("certifications", "")
+        )
+        return facts
+
+    @staticmethod
+    def _complete_from_heuristic(
+        facts: dict,
+        heuristic: dict,
+    ) -> dict:
+
+        for key in (
+            "headline",
+            "location",
+            "summary",
+            "linkedin",
+            "github",
+        ):
+            if heuristic.get(key) and not facts.get(key):
+                facts[key] = heuristic[key]
+
+        for key in ("languages", "interests"):
+            if heuristic.get(key) and not facts.get(key):
+                facts[key] = heuristic[key]
+
+        facts["experience"] = [
+            ResumeParseAgent._repair_job(job)
+            for job in facts.get("experience") or []
+        ]
+
+        if ResumeIngestor._jobs_look_broken(
+            facts.get("experience") or []
+        ) and heuristic.get("experience"):
+            facts["experience"] = heuristic["experience"]
+
+        if (
+            heuristic.get("projects")
+            and not facts.get("projects")
+        ):
+            facts["projects"] = heuristic["projects"]
+
+        heuristic_edu = heuristic.get("education") or []
+        current_edu = facts.get("education") or []
+
+        if len(heuristic_edu) > len(current_edu):
+            facts["education"] = heuristic_edu
+
+        if (
+            heuristic.get("certifications")
+            and not facts.get("certifications")
+        ):
+            facts["certifications"] = heuristic[
+                "certifications"
+            ]
+
         return facts
 
     def _llm_extract(self, text: str) -> dict | None:
 
-        try:
-            import requests
+        return self.agent.extract(text)
 
-            response = requests.get(
-                f"{self.llm.base_url}/models",
-                timeout=0.4,
-            )
+    @staticmethod
+    def _fill_contact(facts: dict, text: str) -> dict:
 
-            if not response.ok:
-                return None
-        except Exception:
-            return None
+        contact = extract_contact(text)
 
-        user_prompt = (
-            "RESUME TEXT:\n\n"
-            f"{text[:12000]}\n\n"
-            "END OF RESUME TEXT.\n\n"
-            "Return the extracted resume JSON now.\n"
-            "Remember:\n"
-            "- JSON only\n"
-            "- no function call\n"
-            "- no parameters\n"
-            "- no resume_text field"
-        )
+        for key, value in contact.items():
+            if value and not facts.get(key):
+                facts[key] = value
 
-        try:
-            raw = self.llm.chat(
-                [
-                    {
-                        "role": "system",
-                        "content": self._extraction_prompt(),
-                    },
-                    {
-                        "role": "user",
-                        "content": user_prompt,
-                    },
-                ],
-                max_tokens=2500,
-            )
-            parsed = self._parse_llm_json(raw)
+        if not facts.get("name") or ResumeParseAgent._is_fake_name(
+            facts.get("name")
+        ):
+            facts["name"] = ResumeIngestor._guess_name(text)
 
-            if parsed:
-                return self._normalize_extracted(parsed)
-        except Exception:
-            return None
-
-        return None
+        return facts
 
     @staticmethod
     def _extraction_prompt() -> str:
@@ -528,9 +673,14 @@ STRICT RULES:
             "location": "",
             "linkedin": "",
             "github": "",
+            "headline": "",
+            "summary": "",
             "skills": [],
+            "languages": [],
+            "interests": [],
             "experience": [],
             "education": [],
+            "projects": [],
         }
 
     @staticmethod
@@ -589,6 +739,8 @@ STRICT RULES:
             "experience": [],
             "education": [],
             "skills": [],
+            "certifications": [],
+            "projects": [],
             "other": [],
         }
         current = "header"
@@ -605,6 +757,12 @@ STRICT RULES:
                     current = "education"
                 elif "skill" in label:
                     current = "skills"
+                elif "project" in label:
+                    current = "projects"
+                    buckets[current].append(line.strip())
+                    continue
+                elif "certification" in label:
+                    current = "certifications"
                 else:
                     current = "other"
                 continue
@@ -619,45 +777,52 @@ STRICT RULES:
     @classmethod
     def _parse_experience(cls, text: str) -> list[dict]:
 
+        text = cls._join_wrapped_headers(text)
+
         jobs: list[dict] = []
         current: dict | None = None
 
         for raw in text.splitlines():
             line = raw.strip()
 
-            if not line:
+            if not line or cls._is_page_noise(line):
                 continue
 
             if cls._is_bullet(line):
                 if current is None:
                     continue
 
-                bullet = cls._strip_bullet(line)
-                current["bullets"].append(bullet)
+                current["bullets"].append(
+                    cls._strip_bullet(line)
+                )
                 continue
 
             date_match = DATE_RANGE_RE.search(line)
 
             if date_match:
                 start, end = cls._normalize_dates(date_match)
-                title = DATE_RANGE_RE.sub("", line).strip(" -,|")
+                remainder = DATE_RANGE_RE.sub(
+                    "",
+                    line,
+                ).strip(" -,|()")
 
                 if current is None:
                     current = cls._new_job()
                     jobs.append(current)
 
-                if title and not current.get("title"):
-                    current["title"] = title
-                elif title and current.get("title") and not current.get("company"):
-                    current["company"] = current["title"]
-                    current["title"] = title
-                elif title and current.get("bullets"):
-                    current = cls._new_job()
-                    jobs.append(current)
-                    current["title"] = title
-
                 current["start_date"] = start
                 current["end_date"] = end
+
+                if remainder:
+                    company, role = cls._split_company_role(
+                        remainder
+                    )
+                    if company:
+                        current["company"] = company
+                    if role:
+                        current["title"] = cls._clean_title(
+                            role
+                        )
                 continue
 
             if current and current.get("bullets"):
@@ -669,9 +834,23 @@ STRICT RULES:
                     ).strip()
                     continue
 
+            if cls._is_job_header(line):
+                if (
+                    current
+                    and not current.get("bullets")
+                    and not current.get("title")
+                    and not re.search(r"[—–]", line)
+                ):
+                    current["title"] = cls._clean_title(line)
+                    continue
+
                 current = cls._new_job()
                 jobs.append(current)
-                current["company"] = line
+                company, role = cls._split_company_role(line)
+                current["company"] = company or ""
+                current["title"] = cls._clean_title(
+                    role or line
+                )
                 continue
 
             if current is None:
@@ -684,6 +863,10 @@ STRICT RULES:
                 current["company"] = line
             elif not current.get("title"):
                 current["title"] = line
+            elif not current.get("bullets"):
+                current["title"] = (
+                    current.get("title") or line
+                )
             else:
                 current = cls._new_job()
                 jobs.append(current)
@@ -692,8 +875,23 @@ STRICT RULES:
         return [
             job
             for job in jobs
-            if job.get("company") or job.get("title")
+            if (job.get("company") or job.get("title"))
+            and not cls._is_bullet(job.get("company") or "")
         ]
+
+    @staticmethod
+    def _is_job_header(line: str) -> bool:
+
+        if ResumeIngestor._is_bullet(line):
+            return False
+
+        if len(line) > 120:
+            return False
+
+        return bool(
+            re.search(r"[—–]", line)
+            or ROLE_HINT_RE.search(line)
+        )
 
     @staticmethod
     def _new_job() -> dict:
@@ -707,14 +905,124 @@ STRICT RULES:
         }
 
     @staticmethod
+    def _is_page_noise(line: str) -> bool:
+
+        return bool(
+            re.match(
+                r"^--?\s*\d+\s+of\s+\d+"
+                r"|^\d+\s*/\s*\d+$"
+                r"|^page\s+\d+"
+                r"|^nayaab ahmed n$",
+                line,
+                re.I,
+            )
+        )
+
+    @staticmethod
+    def _join_wrapped_headers(text: str) -> str:
+
+        lines: list[str] = []
+
+        for raw in text.splitlines():
+            line = raw.strip()
+
+            if not line:
+                if lines and lines[-1]:
+                    lines.append("")
+                continue
+
+            if (
+                lines
+                and re.search(r"[–—\-]\s*$", lines[-1])
+                and re.match(
+                    rf"^(present|current|\)|{MONTH_RE})",
+                    line,
+                    re.I,
+                )
+            ):
+                lines[-1] = f"{lines[-1]} {line}".strip()
+                continue
+
+            lines.append(line)
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _split_company_role(text: str) -> tuple[str, str]:
+
+        cleaned = text.strip(" -,|")
+
+        for sep in (" — ", " – ", " - ", "—", "–"):
+            if sep in cleaned:
+                left, right = cleaned.split(sep, 1)
+                left = left.strip(" ,")
+                right = right.strip(" ,")
+                company, role = ResumeIngestor._order_company_role(
+                    left,
+                    right,
+                )
+                return (
+                    ResumeIngestor._normalize_company(company),
+                    role,
+                )
+
+        return "", cleaned
+
+    @staticmethod
+    def _order_company_role(
+        left: str,
+        right: str,
+    ) -> tuple[str, str]:
+
+        if ROLE_HINT_RE.search(left) and not ROLE_HINT_RE.search(
+            right
+        ):
+            return right, left
+
+        return left, right
+
+    @staticmethod
+    def _normalize_company(name: str) -> str:
+
+        compact = re.sub(r"\s+", " ", name).strip()
+        return compact.rstrip(",")
+
+    @staticmethod
+    def _clean_title(title: str | None) -> str:
+
+        text = (title or "").strip()
+        return re.sub(r"\s*\(\s*\)\s*$", "", text).strip()
+
+    @staticmethod
     def _is_bullet(line: str) -> bool:
 
-        return bool(re.match(r"^[•●▪◦\-–—*]\s+", line))
+        return bool(BULLET_RE.match(line or ""))
 
     @staticmethod
     def _strip_bullet(line: str) -> str:
 
-        return re.sub(r"^[•●▪◦\-–—*]\s+", "", line).strip()
+        return BULLET_RE.sub("", line).strip()
+
+    @staticmethod
+    def _jobs_look_broken(jobs: list[dict]) -> bool:
+
+        if not jobs:
+            return True
+
+        empty = sum(
+            1
+            for job in jobs
+            if not (job.get("bullets") or job.get("description"))
+        )
+        long_company = sum(
+            1
+            for job in jobs
+            if len(str(job.get("company") or "")) > 80
+            or ResumeIngestor._is_bullet(
+                str(job.get("company") or "")
+            )
+        )
+        return empty >= 3 or long_company >= 2 or len(jobs) > 8
 
     @staticmethod
     def _is_wrapped_line(line: str, last_bullet: str) -> bool:
@@ -746,6 +1054,44 @@ STRICT RULES:
         )
 
     @classmethod
+    def _parse_projects(cls, text: str) -> list[dict]:
+
+        if not text.strip():
+            return []
+
+        name = "Project"
+        bullets: list[str] = []
+
+        for raw in text.splitlines():
+            line = raw.strip()
+
+            if not line or cls._is_page_noise(line):
+                continue
+
+            if cls._is_bullet(line):
+                bullets.append(cls._strip_bullet(line))
+                continue
+
+            if bullets and cls._is_wrapped_line(line, bullets[-1]):
+                bullets[-1] = f"{bullets[-1]} {line}".strip()
+                continue
+
+            if "project" in line.lower():
+                name = line
+                continue
+
+        if not bullets:
+            return []
+
+        return [
+            {
+                "name": name,
+                "bullets": bullets,
+                "description": " ".join(bullets),
+            }
+        ]
+
+    @classmethod
     def _parse_education(cls, text: str) -> list[dict]:
 
         entries = []
@@ -756,22 +1102,66 @@ STRICT RULES:
         ]
 
         for index, line in enumerate(lines):
-            if re.search(
+            if not re.search(
                 r"bachelor|master|b\.e|b\.tech|m\.tech|"
-                r"degree|engineering|diploma",
+                r"degree|engineering|diploma|pcmb|"
+                r"college|institute|university|cgpa|"
+                r"\d+\.\d+\s*%",
                 line,
                 re.I,
             ):
-                institution = ""
+                continue
 
-                if index > 0:
-                    institution = re.sub(
-                        r"\s+\d{4}\s*[-–]\s*\d{4}\s*$",
-                        "",
-                        lines[index - 1],
-                    ).strip(" ,")
+            institution = ""
+            degree = line
+            year = ""
 
-                year = ""
+            for sep in (" — ", " – ", " - ", "—", "–"):
+                if sep in line:
+                    left, right = line.split(sep, 1)
+                    left = left.strip()
+                    right = right.strip()
+                    years = ""
+
+                    if "|" in right:
+                        right, years = [
+                            part.strip()
+                            for part in right.split("|", 1)
+                        ]
+
+                    if re.search(
+                        r"institute|college|university|vidya",
+                        left,
+                        re.I,
+                    ) and re.search(
+                        r"b\.e|b\.tech|pcmb|bachelor|master|"
+                        r"engineering",
+                        right,
+                        re.I,
+                    ):
+                        institution = left
+                        degree = right
+                    else:
+                        degree = left
+                        institution = right
+
+                    year_match = re.search(
+                        r"(\d{4})\s*[–\-]\s*(\d{4})",
+                        years or right,
+                    )
+
+                    if year_match:
+                        year = year_match.group(2)
+                    break
+
+            if not institution and index > 0:
+                institution = re.sub(
+                    r"\s+\d{4}\s*[-–]\s*\d{4}\s*$",
+                    "",
+                    lines[index - 1],
+                ).strip(" ,")
+
+            if not year:
                 year_match = re.search(
                     r"(\d{4})\s*[-–]\s*(\d{4})",
                     lines[index - 1] if index else line,
@@ -780,20 +1170,20 @@ STRICT RULES:
                 if year_match:
                     year = year_match.group(2)
 
-                entries.append(
-                    {
-                        "degree": line,
-                        "institution": institution,
-                        "year": year,
-                    }
-                )
+            entries.append(
+                {
+                    "degree": degree,
+                    "institution": institution,
+                    "year": year,
+                }
+            )
 
         return entries
 
     @classmethod
     def _parse_skills(cls, text: str) -> list[str]:
 
-        skills: list[str] = []
+        lines: list[str] = []
 
         for raw in text.splitlines():
             line = cls._strip_bullet(raw.strip())
@@ -801,16 +1191,157 @@ STRICT RULES:
             if not line:
                 continue
 
+            if lines and ":" not in line:
+                lines[-1] = f"{lines[-1]} {line}".strip()
+                continue
+
+            lines.append(line)
+
+        skills: list[str] = []
+
+        for line in lines:
             if ":" in line:
                 line = line.split(":", 1)[1]
 
-            for item in re.split(r"[,;/]| and ", line):
+            for item in re.split(r"[,;|]|\sand\s", line):
                 skill = item.strip(" .")
 
-                if 1 <= len(skill) < 40 and not SECTION_RE.match(skill):
+                if 1 <= len(skill) < 60 and not SECTION_RE.match(skill):
                     skills.append(skill)
 
         return list(dict.fromkeys(skills))
+
+    @classmethod
+    def _parse_certs(cls, text: str) -> list[str]:
+
+        certs = []
+
+        for raw in text.splitlines():
+            line = cls._strip_bullet(raw.strip())
+
+            if line:
+                line = re.sub(r"^[•●▪◦\-–—*]+\s*", "", line)
+                certs.append(line)
+
+        return certs
+
+    @staticmethod
+    def _parse_extra(text: str) -> dict:
+
+        headline = ""
+
+        for line in text.splitlines():
+            line = re.sub(r"\s+", " ", line.strip())
+
+            if not line:
+                continue
+
+            email_split = re.split(
+                r"\s+(?=\S+@\S+)",
+                line,
+                maxsplit=1,
+            )
+            candidate = email_split[0].strip(" |")
+
+            if (
+                "|" in candidate
+                and "linkedin" not in candidate.lower()
+                and not re.search(
+                    r"\d{4}|cgpa|pcmb|hindi|kannada",
+                    candidate,
+                    re.I,
+                )
+            ):
+                headline = candidate
+                if headline.isupper() or headline == headline.upper():
+                    headline = " | ".join(
+                        ResumeIngestor._title_headline_part(part)
+                        for part in headline.split("|")
+                    )
+                break
+
+        languages = []
+        interests = []
+        lang = re.search(r"Languages:\s*(.+)", text, re.I)
+        interest = re.search(r"Interests:\s*(.+)", text, re.I)
+        lang_block = re.search(
+            r"LANGUAGES\s+([^\n]+)",
+            text,
+            re.I,
+        )
+
+        if lang:
+            languages = [
+                part.strip()
+                for part in re.split(r"[,;/|]", lang.group(1))
+                if part.strip()
+            ]
+        elif lang_block:
+            languages = [
+                part.strip()
+                for part in re.split(
+                    r"[,;/|]",
+                    lang_block.group(1),
+                )
+                if part.strip()
+            ]
+
+        if interest:
+            interests = [
+                part.strip()
+                for part in interest.group(1).split(",")
+                if part.strip()
+            ]
+
+        summary = ""
+        block = re.search(
+            r"PROFESSIONAL SUMMARY\s+(.+?)"
+            r"(?:\nTECHNICAL|\nPROFESSIONAL EXPERIENCE)",
+            text,
+            re.I | re.S,
+        )
+
+        if block:
+            summary = re.sub(
+                r"\s+",
+                " ",
+                block.group(1),
+            ).strip()
+
+        return {
+            "headline": headline,
+            "languages": languages,
+            "interests": interests,
+            "summary": summary,
+        }
+
+    @staticmethod
+    def _title_headline_part(part: str) -> str:
+
+        words = []
+
+        acronyms = {
+            "RTOS",
+            "AI",
+            "RAG",
+            "LLM",
+            "HSI",
+            "C",
+            "CI",
+            "CD",
+        }
+
+        for word in part.split():
+            upper = word.upper()
+
+            if upper in acronyms:
+                words.append(upper)
+            elif word.isupper():
+                words.append(word.title())
+            else:
+                words.append(word)
+
+        return " ".join(words).strip()
 
     @staticmethod
     def _guess_name(text: str) -> str:
@@ -824,10 +1355,16 @@ STRICT RULES:
             if "@" in line or SECTION_RE.match(line):
                 continue
 
+            if line.isupper() and len(line.split()) >= 2:
+                return line.title()
+
             if FAKE_NAME_RE.match(line) or "_" in line:
                 continue
 
             if any(char.isdigit() for char in line):
+                continue
+
+            if "|" in line:
                 continue
 
             words = line.split()

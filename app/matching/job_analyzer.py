@@ -1,9 +1,18 @@
 import json
+import re
 
 from app.llm.lmstudio_client import LMStudioClient
+from app.matching.job_text import strip_job_html
 from app.models.job_requirements import (
     JobRequirement,
     JobRequirements,
+)
+
+
+FAKE_SKILL_RE = re.compile(
+    r"^(extract_|parse_|get_|format_|job_description$"
+    r"|parameters$|resume_text$)",
+    re.I,
 )
 
 
@@ -40,6 +49,8 @@ Rules:
   "experience building RAG applications" -> "RAG"
   "vector databases" -> "Vector Databases"
 - Do not put explanations inside skill names.
+- Do not return HTML, tool names, or field names
+  such as extract_requirements or job_description.
 - Return only JSON.
 """
 
@@ -134,28 +145,55 @@ Rules:
                 "Job description cannot be empty."
             )
 
-        response = self.client.chat(
-            messages=[
-                {
-                    "role": "system",
-                    "content": self.SYSTEM_PROMPT
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        "Extract the requirements from "
-                        "the following job description.\n\n"
-                        f"{job_description}"
-                    )
-                }
-            ],
-            temperature=0.0,
-            response_schema=self.RESPONSE_SCHEMA
+        cleaned = strip_job_html(job_description)[:8000]
+        last = None
+
+        for attempt in (1, 2):
+            extra = ""
+
+            if attempt == 2:
+                extra = (
+                    "\nReturn skill names only "
+                    "(Python, .NET, React). "
+                    "Never return HTML or tool names.\n"
+                )
+
+            response = self.client.chat(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": self.SYSTEM_PROMPT
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            "Extract the requirements from "
+                            "the following job description.\n\n"
+                            f"{cleaned}"
+                            f"{extra}"
+                        )
+                    }
+                ],
+                temperature=0.0,
+                response_schema=self.RESPONSE_SCHEMA
+            )
+
+            data = self._parse_json(response)
+
+            if data is None:
+                continue
+
+            last = self._build_requirements(data)
+
+            if last.required_skills:
+                return last
+
+        if last is not None:
+            return last
+
+        raise ValueError(
+            "Could not extract job requirements."
         )
-
-        data = json.loads(response)
-
-        return self._build_requirements(data)
 
     @staticmethod
     def _build_requirements(
@@ -168,9 +206,8 @@ Rules:
                 category="technical_skill",
                 mandatory=True,
             )
-            for skill in data.get(
-                "required_skills",
-                []
+            for skill in JobAnalyzer._clean_skills(
+                data.get("required_skills", [])
             )
         ]
 
@@ -180,9 +217,8 @@ Rules:
                 category="technical_skill",
                 mandatory=False,
             )
-            for skill in data.get(
-                "preferred_skills",
-                []
+            for skill in JobAnalyzer._clean_skills(
+                data.get("preferred_skills", [])
             )
         ]
 
@@ -222,3 +258,107 @@ Rules:
                 "role_type"
             )
         )
+
+    @staticmethod
+    def _clean_skills(raw) -> list[str]:
+
+        if isinstance(raw, str):
+            raw = [raw]
+
+        if isinstance(raw, dict):
+            raw = list(raw.keys())
+
+        skills = []
+
+        for item in raw or []:
+            if isinstance(item, dict):
+                item = (
+                    item.get("name")
+                    or item.get("skill")
+                    or ""
+                )
+
+            if not isinstance(item, str):
+                continue
+
+            skill = re.sub(
+                r"\s+",
+                " ",
+                item,
+            ).strip()
+            skill = skill.strip(" ;,")
+
+            if JobAnalyzer._is_bad_skill(skill):
+                continue
+
+            skills.append(skill)
+
+        return list(dict.fromkeys(skills))
+
+    @staticmethod
+    def _is_bad_skill(skill: str) -> bool:
+
+        text = (skill or "").strip()
+
+        if not text or len(text) > 48:
+            return True
+
+        if "<" in text or ">" in text:
+            return True
+
+        if FAKE_SKILL_RE.match(text):
+            return True
+
+        lowered = text.lower()
+
+        return lowered in {
+            "na",
+            "n/a",
+            "none",
+            "job_description",
+            "job description",
+        }
+
+    @staticmethod
+    def _parse_json(raw: str) -> dict | None:
+
+        if not raw or not raw.strip():
+            return None
+
+        text = re.sub(
+            r"^\s*```(?:json)?\s*",
+            "",
+            raw.strip(),
+            flags=re.I,
+        )
+        text = re.sub(r"\s*```\s*$", "", text).strip()
+
+        try:
+            loaded = json.loads(text)
+        except json.JSONDecodeError:
+            decoder = json.JSONDecoder()
+            loaded = None
+
+            for match in re.finditer(r"\{", text):
+                try:
+                    loaded, _ = decoder.raw_decode(
+                        text[match.start():]
+                    )
+                    break
+                except json.JSONDecodeError:
+                    continue
+
+        if not isinstance(loaded, dict):
+            return None
+
+        name = str(loaded.get("name") or "")
+
+        if (
+            "parameters" in loaded
+            or "job_description" in loaded
+            or name.startswith("extract_")
+        ):
+            return None
+
+        return loaded
+

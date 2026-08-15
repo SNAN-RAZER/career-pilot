@@ -41,6 +41,50 @@ STOPWORDS = {
     "knowledge",
     "ability",
     "years",
+    "such",
+    "proficiency",
+    "principles",
+    "bachelor",
+    "bachelors",
+    "science",
+    "electrical",
+    "engineer",
+    "engineering",
+    "developer",
+    "software",
+    "including",
+    "must",
+    "have",
+    "should",
+    "preferred",
+    "plus",
+    "etc",
+    "other",
+    "related",
+    "minimum",
+    "excellent",
+    "understanding",
+    "familiarity",
+    "candidate",
+    "position",
+    "description",
+    "location",
+    "production",
+    "background",
+    "profile",
+    "keywords",
+    "aligned",
+    "targeting",
+    "responsibilities",
+    "about",
+    "india",
+    "chennai",
+    "bangalore",
+    "hyderabad",
+    "pune",
+    "remote",
+    "chatbot",
+    "chatbots",
 }
 
 
@@ -54,9 +98,19 @@ def extract_keywords(text: str) -> list[str]:
     keywords: list[str] = []
 
     for token in tokens:
+        token = token.strip(".,;:()[]")
         normalized = token.lower()
 
         if normalized in STOPWORDS:
+            continue
+
+        if len(normalized) < 3 and normalized not in {
+            "c",
+            "r",
+            "go",
+            "c++",
+            "c#",
+        }:
             continue
 
         if normalized in seen:

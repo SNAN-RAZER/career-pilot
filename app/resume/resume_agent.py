@@ -1,7 +1,6 @@
 from app.models.candidate import CandidateProfile
 from app.models.job import JobPosting
 from app.models.tailored_resume import ResumePackage
-from app.resume.allowed_facts import AllowedFacts
 from app.resume.ats_pipeline import ATSResumePipeline
 from app.resume.ats_validator import ATSValidator
 from app.resume.docx_exporter import ResumeExporter
@@ -45,21 +44,6 @@ class ResumeAgent:
             job,
             candidate,
         )
-
-        if ats.missing_keywords:
-            resume = (
-                self.tailor._cover_claimable_keywords(
-                    resume,
-                    candidate,
-                    job,
-                    AllowedFacts(candidate),
-                )
-            )
-            ats = self.validator.score(
-                resume,
-                job,
-                candidate,
-            )
 
         resume_path = None
 

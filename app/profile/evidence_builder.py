@@ -3,6 +3,7 @@ from app.models.evidence import (
     EvidenceType,
     SkillEvidence,
 )
+from app.resume.skill_match import skill_matches_keyword
 
 
 class EvidenceBuilder:
@@ -13,13 +14,27 @@ class EvidenceBuilder:
     ) -> list[SkillEvidence]:
 
         evidence = []
+        seen: set[tuple[str, str, str]] = set()
 
-        # Professional experience
         for experience in candidate.experiences:
+            blob = " ".join(
+                [
+                    experience.role or "",
+                    *experience.description,
+                ]
+            )
+            technologies = list(
+                experience.technologies or []
+            )
 
-            for technology in experience.technologies:
+            for skill in candidate.skills:
+                if skill_matches_keyword(skill, blob):
+                    technologies.append(skill)
 
-                evidence.append(
+            for technology in dict.fromkeys(technologies):
+                self._add(
+                    evidence,
+                    seen,
                     SkillEvidence(
                         skill=technology,
                         evidence_type=EvidenceType.PROFESSIONAL,
@@ -32,26 +47,80 @@ class EvidenceBuilder:
                             )
                         ),
                         confidence=1.0,
-                        technologies=experience.technologies,
+                        technologies=list(
+                            dict.fromkeys(technologies)
+                        ),
                         domains=experience.domains,
-                    )
+                    ),
                 )
 
-        # Project experience
         for project in candidate.projects:
+            blob = " ".join(
+                [
+                    project.name or "",
+                    project.description or "",
+                ]
+            )
+            technologies = list(
+                project.technologies or []
+            )
 
-            for technology in project.technologies:
+            for skill in candidate.skills:
+                if skill_matches_keyword(skill, blob):
+                    technologies.append(skill)
 
-                evidence.append(
+            for technology in dict.fromkeys(technologies):
+                self._add(
+                    evidence,
+                    seen,
                     SkillEvidence(
                         skill=technology,
                         evidence_type=EvidenceType.PROJECT,
                         source=project.name,
                         description=project.description,
                         confidence=0.8,
-                        technologies=project.technologies,
+                        technologies=list(
+                            dict.fromkeys(technologies)
+                        ),
                         domains=project.domains,
-                    )
+                    ),
                 )
 
+        for skill in candidate.skills:
+            self._add(
+                evidence,
+                seen,
+                SkillEvidence(
+                    skill=skill,
+                    evidence_type=EvidenceType.DECLARED,
+                    source="candidate.skills",
+                    description=(
+                        "Listed on the candidate profile: "
+                        f"{skill}."
+                    ),
+                    confidence=0.9,
+                    technologies=[skill],
+                    domains=candidate.domains,
+                ),
+            )
+
         return evidence
+
+    @staticmethod
+    def _add(
+        evidence: list[SkillEvidence],
+        seen: set[tuple[str, str, str]],
+        item: SkillEvidence,
+    ) -> None:
+
+        key = (
+            item.skill.lower(),
+            item.evidence_type.value,
+            item.source.lower(),
+        )
+
+        if key in seen:
+            return
+
+        seen.add(key)
+        evidence.append(item)

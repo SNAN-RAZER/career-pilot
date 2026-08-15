@@ -1,8 +1,8 @@
 import re
 
 from app.models.candidate import CandidateProfile
-from app.resume.allowed_facts import AllowedFacts
 from app.resume.keyword_extractor import extract_keywords
+from app.resume.skill_match import skill_matches_keyword
 
 
 def contains_keyword(text: str, keyword: str) -> bool:
@@ -73,18 +73,30 @@ def claimable_keywords(
     job_description: str,
 ) -> list[str]:
 
-    corpus = candidate_corpus(candidate)
-    facts = AllowedFacts(candidate)
     keywords = extract_keywords(
         f"{job_title} {job_description}"
     )[:40]
 
+    known_skills = [
+        *candidate.skills,
+        *[
+            tech
+            for item in candidate.experiences
+            for tech in item.technologies
+        ],
+        *[
+            tech
+            for item in candidate.projects
+            for tech in item.technologies
+        ],
+    ]
+
     claimable = []
 
     for keyword in keywords:
-        if facts.allows_skill(keyword) or contains_keyword(
-            corpus,
-            keyword,
+        if any(
+            skill_matches_keyword(skill, keyword)
+            for skill in known_skills
         ):
             claimable.append(keyword)
 

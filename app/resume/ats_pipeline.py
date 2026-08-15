@@ -1,3 +1,5 @@
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -51,32 +53,7 @@ class ATSResumePipeline:
         job: JobPosting,
     ) -> TailoredResume:
 
-        source_text = self._source_text()
-        contact = extract_contact(source_text)
-        facts = self._facts(candidate, contact)
         resume = self.tailor.tailor(candidate, job)
-
-        if self._llm_reachable():
-            try:
-                summary = self._llm_summary(
-                    facts,
-                    job,
-                )
-
-                if summary and self._grounded(
-                    summary,
-                    candidate,
-                ):
-                    resume.summary = summary
-
-                self._apply_llm_bullets(
-                    resume,
-                    facts,
-                    job,
-                    candidate,
-                )
-            except Exception:
-                pass
 
         if self.scorer is not None:
             scores = self.scorer.validate(
@@ -163,9 +140,11 @@ class ATSResumePipeline:
         system = (
             "You are writing a professional resume "
             "summary for a real candidate. Return ONLY "
-            "2 or 3 sentences. Do not invent skills, "
+            "2 or 3 plain sentences. Do not invent skills, "
             "companies, metrics, or experience. Use only "
-            "the supplied facts. Tailor toward the job."
+            "the supplied facts. Tailor toward the job. "
+            "Do not return JSON, function calls, "
+            "tool names, or a parameters object."
         )
         user = (
             f"Name: {facts.get('name')}\n"
@@ -175,12 +154,62 @@ class ATSResumePipeline:
             f"Job description:\n{job.description}\n"
         )
 
-        return self.llm.chat(
+        raw = self.llm.chat(
             [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ]
         ).strip()
+
+        return self._plain_summary(raw) or ""
+
+    @staticmethod
+    def _is_tool_call(text: str) -> bool:
+
+        if not text:
+            return False
+
+        stripped = text.strip()
+
+        if re.search(
+            r'"name"\s*:\s*"(format_|extract_|parse_|get_)',
+            stripped,
+        ):
+            return True
+
+        if "parameters" not in stripped:
+            return False
+
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", stripped, re.S)
+
+            if not match:
+                return "format_resume" in stripped
+
+            try:
+                parsed = json.loads(match.group(0))
+            except json.JSONDecodeError:
+                return "format_resume" in stripped
+
+        return (
+            isinstance(parsed, dict)
+            and "parameters" in parsed
+        )
+
+    @classmethod
+    def _plain_summary(cls, text: str) -> str | None:
+
+        if not text or cls._is_tool_call(text):
+            return None
+
+        cleaned = re.sub(r"\s+", " ", text).strip()
+
+        if cleaned.startswith("{") or cleaned.startswith("["):
+            return None
+
+        return cleaned
 
     def _apply_llm_bullets(
         self,
@@ -233,6 +262,9 @@ class ATSResumePipeline:
                     },
                 ]
             )
+
+            if self._is_tool_call(raw):
+                continue
 
             rewritten = [
                 line.lstrip("- ").strip()
@@ -304,6 +336,9 @@ class ATSResumePipeline:
         text: str,
         candidate: CandidateProfile,
     ) -> bool:
+
+        if ATSResumePipeline._is_tool_call(text):
+            return False
 
         facts = AllowedFacts(candidate)
         corpus = " ".join(

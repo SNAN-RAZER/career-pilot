@@ -1,3 +1,5 @@
+import re
+
 from app.models.skill import (
     SkillMapping,
     SkillRelation,
@@ -83,6 +85,18 @@ class SkillOntology:
             "rtos",
             "real time operating system",
         ],
+
+        "llm applications": [
+            "llm",
+        ],
+
+        "retrieval augmented generation": [
+            "rag",
+        ],
+
+        "python automation": [
+            "python",
+        ],
     }
 
     @classmethod
@@ -91,12 +105,17 @@ class SkillOntology:
         skill: str,
     ) -> str:
 
-        return (
+        text = (
             skill
             .strip()
             .lower()
             .replace("-", " ")
         )
+        return re.sub(
+            r"\s+\d+(?:\.\d+)*$",
+            "",
+            text,
+        ).strip()
 
     @classmethod
     def match(

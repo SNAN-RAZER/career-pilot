@@ -40,14 +40,7 @@ def extract_resume_text(path: Path) -> str:
         )
 
     if suffix == ".pdf":
-        from pypdf import PdfReader
-
-        reader = PdfReader(str(path))
-        pages = [
-            page.extract_text() or ""
-            for page in reader.pages
-        ]
-        return "\n".join(pages)
+        return _extract_pdf(path)
 
     if suffix in {".docx", ".doc"}:
         import docx2txt
@@ -78,12 +71,112 @@ def extract_contact(text: str) -> dict[str, str]:
         text,
         re.I,
     )
+    location = ""
+    city = re.search(
+        r"\b(Bangalore|Bengaluru)(?:,\s*India)?\b",
+        text,
+        re.I,
+    )
+
+    if city:
+        location = city.group(0)
+
+    if not linkedin:
+        slug = re.search(
+            r"LinkedIn:\s*([\w\-]+)",
+            text,
+            re.I,
+        )
+
+        if slug:
+            linkedin_url = (
+                "https://www.linkedin.com/in/"
+                f"{slug.group(1)}"
+            )
+        else:
+            linkedin_url = ""
+    else:
+        linkedin_url = linkedin.group(0)
+
+    if not github:
+        handle = re.search(
+            r"GitHub:\s*([\w\-]+)",
+            text,
+            re.I,
+        )
+
+        if handle:
+            github_url = (
+                f"https://github.com/{handle.group(1)}"
+            )
+        else:
+            github_url = ""
+    else:
+        github_url = github.group(0)
 
     return {
         "email": email.group(0) if email else "",
         "phone": re.sub(r"\s+", "", phone.group(0))
         if phone
         else "",
-        "linkedin": linkedin.group(0) if linkedin else "",
-        "github": github.group(0) if github else "",
+        "linkedin": linkedin_url,
+        "github": github_url,
+        "location": location,
     }
+
+
+def _extract_pdf(path: Path) -> str:
+
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(path))
+    pages = []
+
+    for page in reader.pages:
+        text = ""
+
+        try:
+            text = page.extract_text(
+                extraction_mode="layout"
+            ) or ""
+        except TypeError:
+            text = ""
+
+        if not text.strip():
+            text = page.extract_text() or ""
+
+        pages.append(text)
+
+    return _repair_pdf_lines("\n".join(pages))
+
+
+def _repair_pdf_lines(text: str) -> str:
+
+    lines = [line.rstrip() for line in text.splitlines()]
+    joined: list[str] = []
+
+    for line in lines:
+        stripped = line.strip()
+
+        if (
+            joined
+            and stripped
+            and not re.match(r"^[•●▪◦\-–—*]", stripped)
+            and not stripped.isupper()
+            and joined[-1]
+            and not re.search(r"[.!?]$", joined[-1].rstrip())
+            and (
+                stripped[:1].islower()
+                or re.match(
+                    r"^(present|current|\d+%)",
+                    stripped,
+                    re.I,
+                )
+            )
+        ):
+            joined[-1] = f"{joined[-1]} {stripped}".strip()
+            continue
+
+        joined.append(stripped)
+
+    return "\n".join(joined)

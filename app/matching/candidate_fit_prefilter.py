@@ -211,6 +211,9 @@ class CandidateFitPreFilter:
             professional_score,
         )
 
+        if "Python" in matched_skills:
+            score = max(score, 50)
+
         # Strong mixed profile:
         #
         # Example:

@@ -82,3 +82,8 @@ def test_evidence_builder():
         item.skill == "RAG"
         for item in project
     )
+    assert any(
+        item.skill == "Python"
+        and item.evidence_type == EvidenceType.DECLARED
+        for item in evidence
+    )

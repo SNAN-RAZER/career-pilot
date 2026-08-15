@@ -1,73 +1,102 @@
-Nayaab Ahmed N  
-Github • nayaabahmedn@gmail.com • LinkedIn   
- Phone • 8197718054  
-  
-PROFESSIONAL EXPERIENCE  
- 
- Cyient Limited 
- Software Developer May 2024 –   present   
-• Conduct integration testing using LDRA to ensure software components meet functional and 
-safety requirements. 
-• Perform Hardware-Software Integration (HSI) testing utilizing Eclipse RT and RT Tester to validate 
-system behavior in real-time environments. 
-• Responsible for authoring and maintaining test documentation based on requirements traced 
-through IBM DOORS. 
-• Ensure software is developed in alignment with defined functional and technical requirements. 
-• Perform thorough requirement-to-code traceability analysis to verify that each implemented 
-feature meets the specified customer needs. 
-• Collaborate with cross-functional teams to ensure consistency, compliance, and high standards in 
-code quality and testing processes.  
-Aeronautical Development Agency    
-Software Developer Dec 2022 – Feb 2024  
-● Actively involved in the development and maintenance of mission critical software solutions for 
-embedded systems.  
-● Utilized pragma calls to establish seamless communication and integration between Ada and 
-VxWorks, ensuring optimal performance and reliability.  
-● Employed Git for robust source control management, overseeing versioning and collaborative 
-development for both application and VxWorks projects, this increased our productivity by 50%.  
-● Actively engaged in DevOps practices, focusing on automated builds and delivery pipelines to 
-target environments, resulting in streamlined development processes and increased efficiency.  
-● Collaborated with cross-functional teams to analyze system requirements, troubleshoot issues, 
-and optimize software performance.  
-● Conducted thorough unit testing and debugging activities, ensuring the reliability and stability of 
-mission computer application.  
-● Used Python to help develop Descriptive change notice generation by directly using git diff file, 
-this helped our team to keep a clean documentation setup hence increasing our productivity by 
-200%.  
-● Successfully made a basic interface to monitor Mission computer health status like temperature, 
-uptime ... etc.  using HTML, CSS, JavaScript and NodeJS using APIs provided by Mission 
-computer.  
-Amazon Development Centre (India) Pvt. Ltd    
-PROCESS ASSOCIATE (SEMI-TECH) Dec 2019 – June 2021  
-● Provide proper product pricing to US customers using in-house tools.  
-● Analyze the price changes and suggest ways to keep pricing of products competent.  
-● Create dashboards using Matplotlib with the given CSV data.  
-● Submit new Ideas for the improvement of in-house tools.  
-Protocol Automation Technologies Pvt. Ltd.    
-SCADA DEVELOPER Dec 2018 – May 2019  
-● Design efficient SCADA designs using Movicon.  
-EDUCATION  
- 
-Sai Vidya Institute of Technology, Bengaluru  2014-2018  
-  
-Bachelor of Engineering, Electrical and Electronics Engineering– 6.67 %  
-Indiranagar Composite PU college, Bengaluru  
- PCMB – 88.87%  
- 
-  
- 
-TECHNICAL SKILLS  
- 
-● Programming Languages: C, Python, JavaScript, HTML, CSS, Node.  
-● Technologies/Frameworks: Git, Node.js, Jenkins, TeamCity, Octopus Deploy, Sublime 
-merge, Tortoise Git, RTOS.  
-● Development Tools: Anaconda and VSCode  
-● Testing Tools: HCL One Test Embedded studio, IBM RT-RT and LDRA.  
-  
-  
-ADDITIONAL INFORMATION  
- 
-● Languages: English (Professional), Kannada, Hindi (Native)  
-●   Interests: Badminton, Meditating.   
-● Certification: Full stack developer from GUVI.  
-  
+NAYAAB AHMED N
+PYTHON AUTOMATION ENGINEER | EMBEDDED C | TEST AUTOMATION | RTOS nayaabahmedn@gmail.com | 8197718054 | Bangalore, India | LinkedIn: nayaab-ahmed-n-22a329173 | GitHub: SNAN-RAZER
+PROFESSIONAL SUMMARY
+Python Automation Engineer and Embedded Software Engineer with 6 years of experience across Python automation, Embedded C,
+Ada 95, RTOS, VxWorks, software testing, regression automation, requirements traceability, CI/CD, and aerospace/avionics software. Applies strategic thinking and sound engineering judgment to deliver high-quality automation and validation solutions.
+Delivered measurable improvements including 75% reduction in LDRA review time, 60% reduction in DOORS baseline comparison effort, 30% improvement in bug-detection coverage, 40% reduction in report-generation time, and 50% faster team development workflows. Experienced in safety-critical software validation, unit testing, integration testing, HSI testing, log parsing, Excel parsing,
+Git, Jenkins, TeamCity, and Octopus Deploy.
+TECHNICAL SKILLS
+Programming: Python, Embedded C, C, Ada 95, JavaScript
+Automation & Testing: Python Automation, Test Automation, Regression Automation, Unit Testing, Integration Testing, HSI
+Testing, Software Validation
+Requirements & Traceability: DOORS, DOORS Traceability, Requirement-to-Code Traceability, Requirements Verification
+Embedded & RTOS: VxWorks 7, RTOS, Wind River Workbench, Eclipse RT, Mission Systems, Avionics Software
+Tools & DevOps: LDRA, Git, Jenkins, TeamCity, Octopus Deploy, CI/CD, Build Automation
+Data & Parsing: Excel Parsing, Log Parsing, Report Automation, Matplotlib
+AI / RAG / Agentic AI: Docker, RAG, Agentic AI, LLM Applications, Document Processing, Vector Search, Embeddings, Qdrant,
+Knowledge Graphs, LangChain, LangGraph, Ollama, Prompt Engineering, Retrieval-Augmented Generation
+Professional Strengths: Strategic Thinking, Engineering Judgment, High-Quality Delivery, Proactive Problem Solving, Innovation,
+Competitive Analysis
+Domains: Embedded Systems, Aerospace, Avionics, RTOS, Software Testing, Software Automation
+PROFESSIONAL EXPERIENCE
+Python Automation Engineer / Embedded C — Cyient
+May 2024 – Present
+  Built a Python-based LDRA regression automation tool, reducing review time by 75% and improving regression-validation efficiency.
+  Systematized DOORS verification and baseline comparison, reducing manual comparison effort by 60% and strengthening requirements-verification workflows.
+  Executed Embedded C integration testing and HSI testing using Eclipse RT, improving bug-detection coverage by 30% across validation activities.
+  Optimized parsing automation for test and validation outputs, reducing report-generation time by 40% while increasing validation accuracy.
+  Performed requirement-to-code traceability analysis across implemented features, strengthening alignment with customer functional and technical requirements and contributing to a 60% reduction in manual DOORS baseline-comparison effort.
+  Proactively validated software against functional and technical requirements, contributing to a 30% improvement in bug- detection coverage while maintaining high-quality, compliant testing.
+  Collaborated with cross-functional engineering and testing teams to maintain consistent validation practices and high software- testing standards.
+  Applied innovative, proactive approaches to requirements traceability by building an engineering RAG and agentic AI workflow covering 5 specialized processing stages—document parsing, requirement extraction, structuring, retrieval, and traceability mapping—for requirements-to-test-case analysis.
+Software Developer — Aeronautical Development Agency
+December 2021 – February 2024
+  Engineered Head-Up Display (HUD) software for the MK1A aircraft using Ada 95 on VxWorks 7, developing high-integrity display logic for pilot interfaces.
+  Developed low-level VxWorks 7 drivers for deterministic mission-data loading from target PCs to mission controllers, supporting pre-flight initialization.
+  Maintained and optimized mission-critical Embedded C and Ada 95 modules for real-time avionics environments, focusing on performance and reliability.
+  Authored unit tests in Rational Test RealTime (RTRT) for Ada 95 codebases to support rigorous software validation and aerospace safety requirements.
+  Architected a Python-based Document Control Network (DCN) automation solution, accelerating documentation efficiency by 200%.
+  Created a Node.js performance dashboard using the VxWorks Node.js API to provide real-time telemetry and mission-system health monitoring.
+
+
+Nayaab Ahmed N
+  Enhanced CI/CD pipelines and build automation to reduce manual deployment overhead and streamline software development workflows.
+  Managed application and VxWorks project versioning with Git, contributing to a 50% improvement in team development speed.
+Process Associate — Amazon Development Center
+December 2019 – June 2021
+  Built automated analytics dashboards using Matplotlib, increasing operational efficiency by 50% and reducing manual analysis effort.
+  Performed competitive benchmarking and product-pricing analysis, applying business judgment to support competitive pricing decisions and reduce pricing errors by 40%.
+Process Associate — Amazon Development Center
+December 2018 – May 2019
+  Designed SCADA layouts using Movicon, reducing manual checking effort by 50%.
+AI / RAG / KNOWLEDGE GRAPH PROJECT
+  Developed an agentic AI RAG system for Honda Aircraft requirements-to-test-case traceability, processing requirements and test-case documents through specialized agents for document parsing, requirement extraction, structuring, semantic retrieval, and traceability mapping.
+  Implemented a multi-agent document-processing workflow using Python, LangChain, LangGraph, Ollama, Qdrant, embeddings, and prompt-driven structured extraction to connect requirements with relevant test cases.
+  Architected the system to process PDF documents containing text, tables, and structured test procedures while retaining document metadata, chunk lineage, and source context for traceability.
+  Built semantic retrieval and mapping workflows that identify relationships between requirements and test cases and generate mapping rationale grounded in source documentation.
+  Worked on a knowledge-graph-based traceability approach to represent relationships among requirements, test cases, documents, components, and verification evidence for explainable engineering analysis.
+  Containerized RAG and AI services with Docker and integrated local LLM inference through Ollama to support an offline engineering knowledge environment without cloud inference dependencies.
+  Created multiple specialized agents for document processing, requirement extraction, requirement structuring, retrieval, and requirement-to-test-case mapping, improving separation of concerns and explainability.
+  Established vector indexing with Qdrant and embedding-based retrieval for engineering documentation, preserving document- level metadata for downstream traceability.
+  Applied chunking, metadata lineage, context preservation, and validation controls to reduce hallucinated requirement identifiers and keep traceability mappings grounded in source documents.
+EDUCATION
+B.E Electrical & Electronics Engineering (CGPA: 6.67) — Sai Vidya Institute of Technology | 2014 – 2018
+PCMB (88.87%) — Indiranagar Composite PU College | 2013 – 2014
+CERTIFICATION
+  • Full-Stack Developer — GUVI
+LANGUAGES
+English | Hindi | Kannada
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Nayaab Ahmed N

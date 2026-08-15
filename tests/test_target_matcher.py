@@ -212,7 +212,33 @@ def test_customer_care_title_is_rejected():
     assert result.matched is False
 
 
-def test_rtos_query_matches_firmware_title():
+def test_python_query_matches_python_developer_title():
+
+    matcher = TargetMatcher()
+
+    result = matcher.match(
+        make_job("Python Developer"),
+        make_profile(),
+        queries=["python"],
+    )
+
+    assert result.matched is True
+
+
+def test_python_query_matches_backend_job_with_python_in_jd():
+
+    matcher = TargetMatcher()
+
+    result = matcher.match(
+        make_job(
+            "Backend Engineer",
+            "Build APIs using Python and Django.",
+        ),
+        make_profile(),
+        queries=["python"],
+    )
+
+    assert result.matched is True
 
     matcher = TargetMatcher()
 

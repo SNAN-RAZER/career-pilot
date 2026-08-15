@@ -1,4 +1,5 @@
 from app.models.candidate import CandidateProfile
+from app.resume.skill_match import skill_matches_keyword
 
 
 class AllowedFacts:
@@ -60,12 +61,17 @@ class AllowedFacts:
     def allows_skill(self, skill: str) -> bool:
         normalized = self.normalize(skill)
 
+        if not normalized:
+            return False
+
         if normalized in self.skills:
             return True
 
+        if len(normalized) <= 2:
+            return False
+
         return any(
-            normalized in allowed
-            or allowed in normalized
+            skill_matches_keyword(normalized, allowed)
             for allowed in self.skills
-            if allowed
+            if allowed and len(allowed) > 2
         )

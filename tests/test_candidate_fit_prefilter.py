@@ -190,7 +190,22 @@ def test_candidate_fit_uses_project_evidence():
     assert "RAG" in result.matched_skills
 
 
-def test_empty_candidate_has_no_fit():
+def test_python_only_job_is_enough_fit():
+
+    candidate = make_candidate()
+
+    job = make_job(
+        "Python Developer",
+        "Write Python scripts and automation.",
+    )
+
+    result = CandidateFitPreFilter().match(
+        candidate,
+        job,
+    )
+
+    assert result.matched is True
+    assert "Python" in result.matched_skills
 
     candidate = CandidateProfile(
         name="Empty Candidate",

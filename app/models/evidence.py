@@ -9,6 +9,7 @@ class EvidenceType(str, Enum):
     PROJECT = "project"
     EDUCATION = "education"
     CERTIFICATION = "certification"
+    DECLARED = "declared"
 
 
 class SkillEvidence(BaseModel):

@@ -33,6 +33,7 @@ class ResumeExporter:
         candidate: CandidateProfile,
         job: JobPosting,
         resume: TailoredResume,
+        dest: Path | None = None,
     ) -> str:
 
         document = Document()
@@ -103,6 +104,19 @@ class ResumeExporter:
                     school_run2.font.size = Pt(10.5)
                     school_run2.font.color.rgb = MUTED
 
+        path = dest or (
+            self.output_dir
+            / self.filename(job)
+        )
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        document.save(path)
+
+        return str(path)
+
+    @staticmethod
+    def filename(job: JobPosting) -> str:
+
         safe_title = "".join(
             character
             if character.isalnum()
@@ -110,14 +124,7 @@ class ResumeExporter:
             for character in job.title
         )[:40]
 
-        path = (
-            self.output_dir
-            / f"{job.job_id}_{safe_title}.docx"
-        )
-
-        document.save(path)
-
-        return str(path)
+        return f"{job.job_id}_{safe_title}.docx"
 
     @staticmethod
     def _set_page(document: Document) -> None:
@@ -221,10 +228,12 @@ class ResumeExporter:
         if not skills:
             return
 
-        self._add_body(
-            document,
-            ", ".join(skills),
-        )
+        for offset in range(0, len(skills), 4):
+            chunk = skills[offset:offset + 4]
+            self._add_bullet(
+                document,
+                " | ".join(chunk),
+            )
 
     def _add_job_block(
         self,

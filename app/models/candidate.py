@@ -40,7 +40,13 @@ class CandidateProfile(BaseModel):
 
     professional_summary: str = ""
 
+    headline: str = ""
+
     skills: List[str] = Field(default_factory=list)
+
+    languages: List[str] = Field(default_factory=list)
+
+    interests: List[str] = Field(default_factory=list)
 
     domains: List[str] = Field(default_factory=list)
 

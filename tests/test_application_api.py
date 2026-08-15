@@ -228,7 +228,58 @@ def test_tailor_application_resume():
     assert data["ats_score"] is not None
     assert data["tailored_summary"]
     assert "Python" in data["tailored_skills"]
-    assert data["resume_path"]
+    assert data["resume_path"] is None
+
+
+def test_download_resume_builds_docx_without_keeping_path():
+
+    dependencies = (
+        application_dependencies
+    )
+
+    from app.models.application_recommendation import (
+        ApplicationRecommendation,
+    )
+    from app.models.job import JobPosting
+
+    job_id = f"api-test-docx-{uuid4().hex}"
+
+    job = JobPosting(
+        job_id=job_id,
+        title="AI Engineer",
+        company="API Test Company",
+        location="Bangalore",
+        description="Python RAG LLM LangChain",
+        source="test",
+    )
+
+    dependencies.workflow.enqueue(
+        ApplicationRecommendation(
+            job=job,
+            match_score=90.0,
+            eligibility_score=88.0,
+            recommendation="APPLY",
+            missing_requirements=[],
+            reasons=["Strong match."],
+            next_action="APPLY",
+        )
+    )
+
+    response = client.get(
+        f"/applications/{job_id}/resume-file"
+    )
+
+    assert response.status_code == 200
+    assert (
+        "officedocument.wordprocessingml.document"
+        in response.headers["content-type"]
+    )
+    assert response.content[:2] == b"PK"
+
+    stored = dependencies.service.get(job_id)
+
+    assert stored.tailored_resume is not None
+    assert stored.resume_path is None
 
 
 def test_naukri_apply_blocked_without_resume():

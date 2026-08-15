@@ -8,6 +8,8 @@ from app.models.tailored_resume import TailoredResume
 from app.resume.ats_validator import ATSValidator
 from app.resume.resume_agent import ResumeAgent
 from app.resume.resume_tailor import ResumeTailor
+from app.resume.ats_pipeline import ATSResumePipeline
+from app.resume.keyword_extractor import extract_keywords
 
 
 def make_candidate() -> CandidateProfile:
@@ -146,8 +148,8 @@ def test_experience_is_grouped_by_company():
         "Aeronautical Development Agency"
     )
     assert "4 years" in resume.summary
-    assert "%" not in " ".join(ada.bullets)
-    assert "VxWorks" not in resume.skills
+    assert "VxWorks" in resume.skills
+    assert "Developed mission software" in ada.bullets[0]
 
 
 def test_resume_changes_with_the_job():
@@ -177,6 +179,68 @@ def test_resume_changes_with_the_job():
     assert ai_resume.skills != fw_resume.skills
     assert "Firmware Developer" in fw_resume.summary
     assert "AI Engineer" in ai_resume.summary
+    assert "Profile keywords aligned" not in fw_resume.summary
+    assert "format_resume" not in ai_resume.summary
+
+
+def test_tailor_keeps_every_achievement_bullet():
+
+    candidate = make_candidate()
+    candidate.experiences[0].description = [
+        "Engineered HUD software on VxWorks 7.",
+        "Architected a Python DCN solution that accelerated documentation by 200%.",
+        "Collaborated with cross-functional teams.",
+    ]
+    resume = ResumeTailor().tailor(
+        candidate,
+        make_job(),
+    )
+    ada = next(
+        block
+        for block in resume.experiences
+        if "Aeronautical" in block.company
+    )
+
+    assert len(ada.bullets) == 3
+    assert any("200%" in bullet for bullet in ada.bullets)
+    assert any("HUD" in bullet for bullet in ada.bullets)
+    assert "TensorFlow" not in " ".join(ada.bullets)
+
+
+def test_keyword_extractor_skips_jd_filler():
+
+    keywords = extract_keywords(
+        "Proficiency in C++ and Python. "
+        "Such principles. Bachelors in Electrical Science. "
+        "Engineer with HCL One Test Embedded studio."
+    )
+
+    lowered = [item.lower() for item in keywords]
+
+    assert "python" in lowered
+    assert "c++" in lowered
+    assert "such" not in lowered
+    assert "proficiency" not in lowered
+    assert "principles" not in lowered
+    assert "bachelors" not in lowered
+
+
+def test_llm_tool_call_is_not_a_summary():
+
+    blob = (
+        '{"name": "format_resume", "parameters": '
+        '{"experience": "Cyient Limited LDRA testing"}}'
+    )
+
+    assert ATSResumePipeline._is_tool_call(blob)
+    assert ATSResumePipeline._plain_summary(blob) is None
+    assert ATSResumePipeline._grounded(
+        blob,
+        make_candidate(),
+    ) is False
+    assert ATSResumePipeline._plain_summary(
+        "Embedded software developer with VxWorks and Python."
+    )
 
 
 def test_ats_rejects_invented_skills():
@@ -258,6 +322,41 @@ def test_resume_agent_exports_docx(tmp_path):
         "TECHNICAL SKILLS" in text.upper()
         for text in texts
     )
+    assert any(
+        text.strip().startswith("•") and "Python" in text
+        for text in texts
+    )
+    assert not any(
+        "Python, RAG, LangChain" in text
+        for text in texts
+    )
+
+
+def test_jd_boilerplate_is_not_copied_as_skills():
+
+    resume = ResumeTailor().tailor(
+        make_candidate(),
+        JobPosting(
+            job_id="junk-jd",
+            title="AI Python Developer",
+            company="Acme",
+            location="Chennai",
+            description=(
+                "LOCATION Chennai Chatbots production "
+                "candidate background Matplotlib Python C"
+            ),
+            source="test",
+        ),
+    )
+    blob = " ".join(resume.skills).lower()
+
+    assert "chennai" not in blob
+    assert "chatbots" not in blob
+    assert "candidate" not in blob
+    assert "background" not in blob
+    assert "location" not in blob
+    assert "Python" in resume.skills
+    assert "Profile keywords aligned" not in resume.summary
 
 
 def test_ats_is_100_without_inventing_job_skills():

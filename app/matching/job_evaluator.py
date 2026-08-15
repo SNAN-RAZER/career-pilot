@@ -13,6 +13,7 @@ from app.models.job import JobPosting
 from app.matching.job_analysis_input import (
     build_job_analysis_input,
 )
+from app.resume.skill_match import skill_matches_keyword
 
 
 class JobEvaluator:
@@ -73,6 +74,11 @@ class JobEvaluator:
         required_evaluations = []
 
         for requirement in requirements.required_skills:
+
+            if JobAnalyzer._is_bad_skill(
+                requirement.requirement
+            ):
+                continue
 
             evaluation = self._evaluate_requirement(
                 requirement.requirement,
@@ -229,6 +235,10 @@ class JobEvaluator:
             for item in evidence
             if item.skill.strip().lower()
             == requirement_lower
+            or skill_matches_keyword(
+                item.skill,
+                requirement,
+            )
         ]
 
         if exact_matches:

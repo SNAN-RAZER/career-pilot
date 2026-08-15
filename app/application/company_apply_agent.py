@@ -46,18 +46,20 @@ class CompanyApplyAgent:
         application: ApplicationRecord,
         candidate: CandidateProfile,
         launch: bool = False,
+        write_resume: bool = True,
     ) -> CompanyApplyPackage:
 
-        resume_path = application.resume_path
+        resume_path = application.resume_path or ""
 
-        if not resume_path or not Path(
-            resume_path
-        ).exists():
+        if write_resume and (
+            not resume_path
+            or not Path(resume_path).exists()
+        ):
             package = self.resume_agent.run(
                 candidate,
                 application.job,
             )
-            resume_path = package.resume_path
+            resume_path = package.resume_path or ""
 
         details = {}
         client = self.client
@@ -98,7 +100,7 @@ class CompanyApplyAgent:
             ),
         )
 
-        if launch:
+        if launch and resume_path:
             self.launch(result)
 
         return result

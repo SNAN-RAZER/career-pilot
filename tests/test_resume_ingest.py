@@ -5,6 +5,7 @@ from app.profile.resume_ingest import (
     ResumeIngestor,
     profile_gaps,
 )
+from app.profile.resume_parse_agent import ResumeParseAgent
 
 
 SAMPLE = """
@@ -54,12 +55,42 @@ def test_parse_real_resume_extracts_jobs_and_skills():
     companies = [
         job["company"] for job in facts["experience"]
     ]
-    assert "Cyient Limited" in companies
+    assert any("Cyient" in company for company in companies)
     assert "Aeronautical Development Agency" in companies
     assert len(facts["experience"]) >= 4
+    assert facts["headline"].upper().startswith("PYTHON")
+    assert facts.get("projects")
+    assert "linkedin.com" in (facts.get("linkedin") or "")
+    assert "github.com" in (facts.get("github") or "")
     assert "Python" in facts["skills"]
     assert "LDRA" in facts["skills"]
+    assert "Kannada" in facts["languages"]
+    assert len(facts["education"]) == 2
+    assert any(
+        "PCMB" in (row.get("degree") or "")
+        for row in facts["education"]
+    )
+    amazon = [
+        job
+        for job in facts["experience"]
+        if "amazon" in job["company"].lower()
+    ]
+    assert len(amazon) == 2
+    assert all(job["company"] for job in amazon)
     assert facts["experience"][0]["bullets"]
+    cyient = next(
+        job
+        for job in facts["experience"]
+        if "Cyient" in job["company"]
+    )
+    ada = next(
+        job
+        for job in facts["experience"]
+        if "Aeronautical" in job["company"]
+    )
+    assert any("75%" in bullet for bullet in cyient["bullets"])
+    assert any("HUD" in bullet for bullet in ada["bullets"])
+    assert any("200%" in bullet for bullet in ada["bullets"])
 
 
 def test_parse_text_extracts_contact_and_skills():
@@ -100,6 +131,7 @@ def test_store_maps_facts_into_candidate_json():
             }
         ],
         "location": "Bangalore",
+        "summary": "Python Automation Engineer.",
     }
 
     existing = CandidateProfile(
@@ -126,7 +158,135 @@ def test_store_maps_facts_into_candidate_json():
     assert profile.preferred_locations == [
         "Bangalore"
     ]
+    assert profile.professional_summary == (
+        "Python Automation Engineer."
+    )
     assert profile_gaps(profile) == []
+
+
+def test_parse_uses_agent_json_not_heuristic_merge():
+
+    payload = {
+        "name": "Nayaab Ahmed N",
+        "email": "nayaabahmedn@gmail.com",
+        "phone": "8197718054",
+        "skills": ["Python", "LDRA", "VxWorks"],
+        "experience": [
+            {
+                "company": "Cyient",
+                "title": "Python Automation Engineer",
+                "start_date": "2024-05",
+                "end_date": "Present",
+                "bullets": [
+                    "Engineered Python-based LDRA regression tool, reducing review time by 75%."
+                ],
+            }
+        ],
+        "education": [],
+        "summary": "Python Automation Engineer with DO-178B experience.",
+    }
+
+    ingestor = ResumeIngestor()
+    ingestor._llm_extract = lambda text: payload
+    facts = ingestor.parse_text(SAMPLE)
+
+    assert facts["experience"][0]["bullets"][0].startswith(
+        "Engineered Python-based LDRA"
+    )
+    assert facts["summary"].startswith("Python Automation")
+    assert "Aeronautical" not in str(facts["experience"])
+
+
+def test_usable_agent_json_is_not_rewritten_by_heuristic():
+
+    payload = {
+        "name": "Nayaab Ahmed N",
+        "email": "nayaabahmedn@gmail.com",
+        "phone": "8197718054",
+        "skills": [
+            "Python",
+            "LDRA",
+            "VxWorks",
+            "C",
+        ],
+        "experience": [
+            {
+                "company": "Cyient",
+                "title": "Python Automation Engineer",
+                "start_date": "2024-05",
+                "end_date": "Present",
+                "bullets": [
+                    "Engineered Python-based LDRA regression tool, reducing review time by 75%."
+                ],
+            },
+            {
+                "company": "Amazon Development Center",
+                "title": "Process Associate",
+                "start_date": "2018-12",
+                "end_date": "2019-05",
+                "bullets": [
+                    "Designed SCADA layouts using Movicon."
+                ],
+            },
+        ],
+        "education": [
+            {
+                "degree": "B.E Electrical & Electronics Engineering (CGPA: 6.67)",
+                "institution": "Sai Vidya Institute of Technology",
+                "year": "2018",
+            }
+        ],
+        "summary": "Python Automation Engineer with DO-178B experience.",
+    }
+
+    text = Path(
+        "data/profile/source_resume.txt"
+    ).read_text(encoding="utf-8")
+    ingestor = ResumeIngestor()
+    ingestor._llm_extract = lambda _: payload
+    facts = ingestor.parse_text(text)
+
+    assert len(facts["experience"]) == 2
+    assert facts["experience"][0]["company"] == "Cyient"
+    assert facts["summary"].startswith("Python Automation")
+    assert len(facts["education"]) == 1
+
+
+def test_agent_rejects_tool_call_name():
+
+    assert ResumeParseAgent._is_fake_name(
+        "extract_candidate_profile"
+    )
+    assert not ResumeParseAgent._is_fake_name(
+        "Nayaab Ahmed N"
+    )
+    assert ResumeParseAgent._is_school_entry(
+        {
+            "company": "Sai Vidya Institute of Technology",
+            "title": "B.E Electrical & Electronics Engineering",
+        }
+    )
+    issues = ResumeParseAgent._quality_issues(
+        {
+            "name": "Nayaab Ahmed N",
+            "skills": ["Python", "C", "LDRA"],
+            "experience": [
+                {
+                    "company": (
+                        "Built a Python-based LDRA regression "
+                        "automation tool, reducing review time "
+                        "by 75% and improving efficiency."
+                    ),
+                    "title": "Engineer",
+                    "bullets": [],
+                }
+            ],
+        }
+    )
+    assert issues
+    assert ResumeParseAgent._strip_city(
+        "Cyient, Bangalore"
+    ) == "Cyient"
 
 
 def test_profile_gaps_for_empty_profile():

@@ -60,3 +60,30 @@ def test_naukri_listing_url_keeps_absolute():
     )
 
     assert naukri_listing_url(job) == job.url
+
+
+def test_ignores_naukri_search_urls():
+
+    job = JobPosting(
+        job_id="abc123",
+        title="AI Engineer",
+        company="Accenture",
+        location="Bangalore",
+        description="Python",
+        source="naukri",
+        url="https://www.naukri.com/mnj/search?q=ai",
+    )
+
+    url = extract_company_apply_url(
+        {
+            "job": {
+                "jobUrl": (
+                    "https://www.naukri.com/jobsearch/jobs"
+                )
+            }
+        },
+        job,
+    )
+
+    assert "search" not in url.lower()
+    assert "abc123" in url

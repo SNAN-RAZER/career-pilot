@@ -10,7 +10,7 @@ class CompanyApplyPackage(BaseModel):
     company: str
     apply_url: str
     naukri_url: str | None = None
-    resume_path: str
+    resume_path: str = ""
     candidate_name: str
     candidate_email: str | None = None
     candidate_phone: str | None = None
@@ -46,16 +46,55 @@ def extract_company_apply_url(
     company_urls = [
         url
         for url in urls
-        if _is_company_host(url)
+        if _is_company_host(url) and not _is_search_url(url)
     ]
 
     if company_urls:
         return company_urls[0]
 
-    if listing:
+    if listing and not _is_search_url(listing):
         return listing
 
-    return urls[0] if urls else None
+    if job is not None:
+        job_id = str(getattr(job, "job_id", "") or "")
+
+        if job_id:
+            return (
+                "https://www.naukri.com/job-listings-"
+                + job_id
+            )
+
+    usable = [
+        url for url in urls if not _is_search_url(url)
+    ]
+
+    return usable[0] if usable else None
+
+
+def _is_search_url(url: str) -> bool:
+
+    lower = (url or "").lower()
+    path = urlparse(url).path.lower() if url else ""
+
+    if any(
+        hint in lower
+        for hint in (
+            "jobsearch",
+            "/mnj/search",
+            "search?",
+            "suggestor",
+        )
+    ):
+        return True
+
+    if "naukri.com" in lower and (
+        path in {"", "/", "/mnjuser/homepage"}
+        or "jobs-in-" in path
+        or path.endswith("/search")
+    ):
+        return True
+
+    return False
 
 
 def _is_company_host(url: str) -> bool:

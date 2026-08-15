@@ -11,6 +11,7 @@ import {
 import "./App.css";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
+const MIN_MATCH_SCORE = 80;
 
 const DUMMY_COMPANIES = new Set([
   "API Test Company",
@@ -45,6 +46,8 @@ function App() {
   const [error, setError] = useState(null);
   const [searchError, setSearchError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [bulkApplying, setBulkApplying] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState("");
 
   const [showAllApplications, setShowAllApplications] =
     useState(false);
@@ -62,9 +65,9 @@ function App() {
   const [searchForm, setSearchForm] = useState({
     role: "",
     location: "",
-    pages: 1,
-    experience: 2,
-    jobAge: 3,
+    pages: 3,
+    experience: 6,
+    jobAge: 30,
   });
 
   useEffect(() => {
@@ -236,27 +239,43 @@ function App() {
     try {
       setActionLoading(`${jobId}-${action}`);
 
-      if (action === "company-apply") {
+      if (action === "download-resume") {
+        await downloadTailoredResume(jobId);
+        await loadApplications();
+        return;
+      }
+
+      if (action === "web-apply") {
         const response = await axios.post(
-          `${API_BASE_URL}/applications/${jobId}/company-apply`
+          `${API_BASE_URL}/applications/${jobId}/web-apply`,
+          null,
+          { timeout: 300000 }
         );
-        const pack = response.data;
-
-        if (pack.apply_url) {
-          window.open(pack.apply_url, "_blank");
-        }
-
-        window.open(
-          `${API_BASE_URL}/applications/${jobId}/resume-file`,
-          "_blank"
-        );
-
+        const report = response.data;
         alert(
-          pack.message
-          + "\n\nUpload this resume on the company page:\n"
-          + pack.resume_path
+          (report.message || "Web agent finished.")
+          + "\n\nStatus: "
+          + report.status
+          + "\nPage: "
+          + (report.current_url || report.apply_url)
+          + (
+            report.filled?.length
+              ? "\nFilled: " + report.filled.join("; ")
+              : ""
+          )
+          + (
+            report.thoughts?.length
+              ? "\n\nAgent thinking:\n- "
+                + report.thoughts.slice(-6).join("\n- ")
+              : ""
+          )
+          + (
+            report.steps?.length
+              ? "\n\nActions:\n- "
+                + report.steps.slice(-8).join("\n- ")
+              : ""
+          )
         );
-
         await loadApplications();
         return;
       }
@@ -295,6 +314,91 @@ function App() {
     }
   }
 
+  async function applyToQualifiedJobs() {
+    if (!bulkTargets.length) {
+      alert(
+        `No pending APPLY jobs with match ≥ ${MIN_MATCH_SCORE}%.`
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Apply to all ${bulkTargets.length} qualified job(s) `
+      + `(match ≥ ${MIN_MATCH_SCORE}%, APPLY).\n`
+      + "Easy Apply first; company sites fall back to the web agent.\n"
+      + "If one job fails, the rest still run."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const applied = [];
+    const skipped = [];
+    const failed = [];
+
+    try {
+      setBulkApplying(true);
+
+      for (let index = 0; index < bulkTargets.length; index += 1) {
+        const job = bulkTargets[index];
+        setBulkProgress(
+          `${index + 1}/${bulkTargets.length}`
+        );
+
+        try {
+          const response = await axios.post(
+            `${API_BASE_URL}/applications/${job.job_id}/auto-apply`,
+            null,
+            { timeout: 300000 }
+          );
+          const item = response.data;
+
+          if (item.status === "applied") {
+            applied.push(item);
+          } else if (item.status === "failed") {
+            failed.push(item);
+          } else {
+            skipped.push(item);
+          }
+        } catch (err) {
+          failed.push({
+            title: job.title,
+            detail:
+              applyErrorMessage(err.response?.data?.detail)
+              || err.message
+              || "Request failed",
+          });
+        }
+      }
+
+      const skippedText = skipped
+        .slice(0, 8)
+        .map((item) => `${item.title}: ${item.detail}`)
+        .join("\n")
+        || "none";
+      const failedText = failed
+        .slice(0, 8)
+        .map((item) => `${item.title}: ${item.detail}`)
+        .join("\n")
+        || "none";
+
+      alert(
+        `Finished ${bulkTargets.length} qualified jobs.\n`
+        + `Applied: ${applied.length}\n`
+        + `Skipped: ${skipped.length}\n`
+        + `Failed: ${failed.length}\n\n`
+        + `Applied titles: ${
+          applied.map((item) => item.title).join(", ") || "none"
+        }\n\nSkipped:\n${skippedText}\n\nFailed:\n${failedText}`
+      );
+      await loadApplications();
+    } finally {
+      setBulkApplying(false);
+      setBulkProgress("");
+    }
+  }
+
   const searchJobIds = searchResults
     ? new Set(
         (searchResults.rankings || [])
@@ -324,6 +428,17 @@ function App() {
       (application) =>
         application.status === "PENDING"
     ).length;
+
+  const bulkTargets = applications.filter(
+    (application) =>
+      application.status === "PENDING"
+      && application.recommendation === "APPLY"
+      && application.match_score >= MIN_MATCH_SCORE
+      && (
+        application.eligibility_score == null
+        || application.eligibility_score >= MIN_MATCH_SCORE
+      )
+  );
 
   const appliedApplications =
     applications.filter(
@@ -575,7 +690,10 @@ function App() {
                 <h2>This search</h2>
                 <p>
                   {searchResults
-                    ? `Collected ${searchResults.collected_jobs} · ${searchResults.relevant_jobs} relevant · ${searchResults.applications_queued} queued`
+                    ? `Naukri returned ${searchResults.collected_jobs} · ${searchResults.relevant_jobs} passed filters · dropped ${
+                        (searchResults.rejected_by_target || 0)
+                        + (searchResults.rejected_by_candidate_fit || 0)
+                      } · ${searchResults.applications_queued} queued`
                     : "Run a search to rank live Naukri jobs."}
                 </p>
               </div>
@@ -652,10 +770,13 @@ function App() {
               <div>
                 <h2>Stored jobs</h2>
                 <p>
-                  Saved applications. Pick one from
-                  the dropdown or browse the list.
+                  Apply to all runs every APPLY job at
+                  ≥ {MIN_MATCH_SCORE}% match. Easy Apply
+                  first, then web-agent fallback. A
+                  failed job does not stop the rest.
                 </p>
               </div>
+              <div className="application-actions">
               {searchJobIds && (
                 <button
                   type="button"
@@ -672,6 +793,20 @@ function App() {
                     : "All saved"}
                 </button>
               )}
+              <button
+                type="button"
+                className="action-button apply"
+                disabled={
+                  bulkApplying
+                  || bulkTargets.length === 0
+                }
+                onClick={applyToQualifiedJobs}
+              >
+                {bulkApplying
+                  ? `Applying ${bulkProgress || "..."}`
+                  : `Apply to all (${bulkTargets.length} ≥ ${MIN_MATCH_SCORE}%)`}
+              </button>
+              </div>
             </div>
 
             <label className="stored-jobs-label">
@@ -775,7 +910,7 @@ function easyApplyHint(application) {
     application.source === "naukri"
     && !application.tailored_summary
   ) {
-    return "Click Tailor Resume first. For Accenture-style jobs use Company site + resume.";
+    return "Click Tailor & download DOCX for this company, or Web agent apply.";
   }
 
   if (
@@ -785,7 +920,7 @@ function easyApplyHint(application) {
     return "Resume match is weak. Apply only if you really want this job.";
   }
 
-  return "Easy Apply works only when Naukri has no extra questions. If a screening form appears, use Open Naukri.";
+  return "Use Tailor & download DOCX to save a resume for this company. Web agent apply uses a temporary DOCX on the company site and deletes it after. Open Naukri only opens the listing.";
 }
 
 function applyErrorMessage(detail) {
@@ -810,13 +945,32 @@ function openNaukriApply(jobId, application) {
   if (application?.url) {
     window.open(application.url, "_blank");
   }
+}
 
-  if (application?.tailored_summary) {
-    window.open(
-      `${API_BASE_URL}/applications/${jobId}/resume-file`,
-      "_blank"
-    );
-  }
+async function downloadTailoredResume(jobId) {
+  const response = await axios.get(
+    `${API_BASE_URL}/applications/${jobId}/resume-file`,
+    {
+      responseType: "blob",
+      timeout: 180000,
+    }
+  );
+  const disposition =
+    response.headers["content-disposition"] || "";
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match?.[1] || "tailored-resume.docx";
+  const blob = new Blob([response.data], {
+    type:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 function ApplicationCard({
@@ -898,13 +1052,16 @@ function ApplicationCard({
             className="action-button tailor"
             disabled={
               actionLoading
-              === loadingKey("tailor")
+              === loadingKey("download-resume")
             }
             onClick={() =>
-              onAction(jobId, "tailor")
+              onAction(jobId, "download-resume")
             }
           >
-            Tailor Resume
+            {actionLoading
+              === loadingKey("download-resume")
+              ? "Building DOCX..."
+              : "Tailor & download DOCX"}
           </button>
         )}
 
@@ -947,20 +1104,24 @@ function ApplicationCard({
           </button>
         )}
 
-        {application.status === "PENDING"
-          && application.source === "naukri" && (
+        {application.status === "PENDING" && (
           <button
             type="button"
-            className="action-button tailor"
+            className="action-button apply"
             disabled={
               actionLoading
-              === loadingKey("company-apply")
+              === loadingKey("web-apply")
+            }
+            title={
+              "Agent reads the live page, thinks, then clicks/fills using only your profile JSON. Needs LM Studio running."
             }
             onClick={() =>
-              onAction(jobId, "company-apply")
+              onAction(jobId, "web-apply")
             }
           >
-            Company site + resume
+            {actionLoading === loadingKey("web-apply")
+              ? "Web agent running..."
+              : "Web agent apply"}
           </button>
         )}
 

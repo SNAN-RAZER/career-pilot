@@ -5,16 +5,12 @@ from app.models.tailored_resume import (
     TailoredResume,
 )
 from app.resume.allowed_facts import AllowedFacts
-from app.resume.keyword_coverage import (
-    claimable_keywords,
-    contains_keyword,
-    resume_text,
-)
 from app.resume.grounded_metrics import (
     duration_label,
     tools_line,
 )
 from app.resume.keyword_extractor import extract_keywords
+from app.resume.skill_match import skill_matches_keyword
 
 MONTHS = [
     "Jan",
@@ -83,9 +79,7 @@ class ResumeTailor:
             for skill in skills
             if facts.allows_skill(skill)
             and any(
-                skill.lower() == keyword.lower()
-                or skill.lower() in keyword.lower()
-                or keyword.lower() in skill.lower()
+                skill_matches_keyword(skill, keyword)
                 for keyword in job_keywords
             )
         ]
@@ -94,8 +88,7 @@ class ResumeTailor:
             domain
             for domain in candidate.domains
             if any(
-                domain.lower() in keyword.lower()
-                or keyword.lower() in domain.lower()
+                skill_matches_keyword(domain, keyword)
                 for keyword in job_keywords
             )
         ]
@@ -145,16 +138,35 @@ class ResumeTailor:
 
         for skill in candidate.skills:
             if any(
-                skill.lower() == keyword
-                or skill.lower() in keyword
-                or keyword in skill.lower()
+                skill_matches_keyword(skill, keyword)
                 for keyword in lowered
             ):
                 matched.append(skill)
             else:
                 remaining.append(skill)
 
-        return matched
+        haystack = " ".join(
+            [
+                *[
+                    bullet
+                    for item in candidate.experiences
+                    for bullet in item.description
+                ],
+                *[
+                    tech
+                    for item in candidate.experiences
+                    for tech in item.technologies
+                ],
+            ]
+        ).lower()
+
+        evidenced = [
+            skill
+            for skill in remaining
+            if skill.lower() in haystack
+        ]
+
+        return matched + evidenced
 
     @staticmethod
     def _add_matching_technologies(
@@ -190,9 +202,7 @@ class ResumeTailor:
                 continue
 
             if any(
-                tech.lower() == keyword
-                or tech.lower() in keyword
-                or keyword in tech.lower()
+                skill_matches_keyword(tech, keyword)
                 for keyword in lowered_keywords
             ):
                 extras.append(tech)
@@ -238,32 +248,6 @@ class ResumeTailor:
         facts: AllowedFacts,
     ) -> TailoredResume:
 
-        missing = []
-
-        for keyword in claimable_keywords(
-            candidate,
-            job.title,
-            job.description,
-        ):
-            if contains_keyword(
-                resume_text(resume),
-                keyword,
-            ):
-                continue
-
-            missing.append(keyword)
-
-            if facts.allows_skill(keyword):
-                resume.skills.insert(0, keyword)
-
-        if missing:
-            evidenced = ", ".join(missing)
-            resume.summary = (
-                resume.summary.rstrip(".")
-                + ". Profile keywords aligned to "
-                + f"this job: {evidenced}."
-            )
-
         return resume
 
     @staticmethod
@@ -281,34 +265,26 @@ class ResumeTailor:
         for experience in candidate.experiences:
             scored = []
 
-            for bullet in experience.description:
-                strengthened = (
-                    ResumeTailor._strengthen_bullet(
-                        bullet
-                    )
-                )
+            for index, bullet in enumerate(
+                experience.description
+            ):
+                original = bullet.strip()
+
+                if not original:
+                    continue
+
                 score = ResumeTailor._keyword_score(
-                    strengthened,
+                    original,
                     lowered,
                 )
-                scored.append((score, strengthened))
+                scored.append((score, index, original))
 
             scored.sort(
-                key=lambda item: item[0],
-                reverse=True,
+                key=lambda item: (-item[0], item[1])
             )
+            bullets = [item[2] for item in scored]
 
-            matched_bullets = [
-                bullet
-                for score, bullet in scored
-                if score > 0
-            ]
-
-            if matched_bullets:
-                bullets = matched_bullets
-            elif scored:
-                bullets = [scored[0][1]]
-            else:
+            if not bullets and not experience.company:
                 continue
 
             dates = ResumeTailor._format_dates(
@@ -332,25 +308,22 @@ class ResumeTailor:
                 ) > 0
             ]
 
+            if not matched_tools:
+                matched_tools = list(
+                    experience.technologies[:8]
+                )
+
             blocks.append(
-                (
-                    sum(score for score, _ in scored),
-                    ResumeExperienceBlock(
-                        company=experience.company,
-                        role=experience.role,
-                        dates=dates,
-                        tools=tools_line(matched_tools),
-                        bullets=bullets,
-                    ),
+                ResumeExperienceBlock(
+                    company=experience.company,
+                    role=experience.role,
+                    dates=dates,
+                    tools=tools_line(matched_tools),
+                    bullets=bullets,
                 )
             )
 
-        blocks.sort(
-            key=lambda item: item[0],
-            reverse=True,
-        )
-
-        return [block for _, block in blocks]
+        return blocks
 
     @staticmethod
     def _flatten_experience(
@@ -552,46 +525,30 @@ class ResumeTailor:
         experiences: list[ResumeExperienceBlock],
     ) -> str:
 
-        skill_text = ", ".join(
-            relevant_skills[:8]
-        )
-
-        years = int(
-            candidate.total_experience_years
-        )
         location = (
             candidate.preferred_locations[0]
             if candidate.preferred_locations
             else ""
         )
-        top_role = (
-            experiences[0].role
-            if experiences
-            else job.title
+        base = (
+            candidate.professional_summary or ""
+        ).strip().rstrip(".")
+        years = int(
+            candidate.total_experience_years
         )
-        evidence = (
-            experiences[0].bullets[0]
-            if experiences and experiences[0].bullets
-            else ""
-        )
-
         parts = []
 
-        lead = (
-            f"{years} years of professional "
-            f"experience as a {top_role}, targeting "
-            f"{job.title}"
+        if base:
+            parts.append(base + ".")
+
+        target = (
+            f"{years} years of professional experience, "
+            f"targeting {job.title}"
         )
 
         if location:
-            lead += f" in {location}"
+            target += f" in {location}"
 
-        if skill_text:
-            lead += f" using {skill_text}"
-
-        parts.append(lead + ".")
-
-        if evidence:
-            parts.append(evidence)
+        parts.append(target + ".")
 
         return " ".join(parts)

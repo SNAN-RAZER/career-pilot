@@ -206,10 +206,17 @@ class TargetMatcher:
                 continue
 
             if len(tokens) == 1:
-                if not cls._engineering_title(title):
+                token = tokens[0]
+
+                if cls._contains_token(title, token):
+                    return True
+
+                if len(token) <= 3 and not cls._engineering_title(
+                    title
+                ):
                     continue
 
-                if cls._contains_token(text, tokens[0]):
+                if cls._contains_token(text, token):
                     return True
                 continue
 

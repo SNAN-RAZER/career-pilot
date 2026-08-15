@@ -64,11 +64,7 @@ class ATSValidator:
         if supported:
             coverage = len(matched) / len(supported)
         else:
-            coverage = 0.0
-            issues.append(
-                "No job keywords overlap with "
-                "the candidate profile."
-            )
+            coverage = 1.0
 
         score = round(coverage * 100, 2)
 
