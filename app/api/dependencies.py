@@ -70,6 +70,11 @@ class ApplicationDependencies:
             resume_agent or ResumeAgent()
         )
 
+    def reset_naukri_client(self):
+
+        self._naukri_client = None
+        self._job_search_pipeline = None
+
     def get_naukri_client(self):
 
         if self._naukri_client is not None:

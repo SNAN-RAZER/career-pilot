@@ -120,11 +120,13 @@ def plan_next_action(
     think=None,
     goal: dict | None = None,
     history: list[str] | None = None,
+    stage: str | None = None,
 ) -> AgentAction:
 
     haystack = (
         f"{snapshot.title} {snapshot.text[:4000]}"
     ).lower()
+    stage = stage or classify_page_stage(snapshot)
 
     if _looks_like_captcha(haystack, snapshot):
         return AgentAction(
@@ -142,6 +144,7 @@ def plan_next_action(
             think,
             goal=goal,
             history=history or [],
+            stage=stage,
         )
 
         if llm_action is not None:
@@ -153,7 +156,78 @@ def plan_next_action(
         filled_ids,
         allow_submit,
         haystack,
+        stage=stage,
     )
+
+
+def classify_page_stage(snapshot: PageSnapshot) -> str:
+
+    haystack = (
+        f"{snapshot.title} {snapshot.text[:3000]}"
+    ).lower()
+    elements = snapshot.elements
+    blobs = [_element_blob(item) for item in elements]
+
+    if _looks_like_captcha(haystack, snapshot):
+        return "captcha"
+
+    has_password = any(
+        item.type == "password" or "password" in blob
+        for item, blob in zip(elements, blobs)
+    )
+    has_sso = any(
+        any(hint in blob for hint in SSO_HINTS)
+        for blob in blobs
+    )
+
+    if has_password or has_sso:
+        if re.search(
+            r"\b(sign in|log in|login|create account)\b",
+            haystack,
+        ) or has_sso:
+            return "auth"
+
+    fillable = [
+        item
+        for item in elements
+        if item.tag in {"input", "textarea", "select"}
+        and (item.type or "").lower()
+        not in {"hidden", "submit", "button", "checkbox", "radio"}
+        and not _is_site_search_control(item, snapshot)
+    ]
+    has_file = any(_is_file(item) for item in elements)
+    has_apply = any(_is_nav_button(blob) for blob in blobs)
+    has_submit = any(_is_submit(blob) for blob in blobs)
+    has_next = any(
+        re.search(r"\b(next|continue|save and continue)\b", blob)
+        for blob in blobs
+    )
+
+    if has_file or len(fillable) >= 2:
+        return "form"
+
+    if len(fillable) == 1 and (has_next or has_submit):
+        return "form"
+
+    if has_apply and len(fillable) == 0:
+        return "gate"
+
+    if has_next and len(fillable) == 0:
+        return "gate"
+
+    if "loading" in haystack or "please wait" in haystack:
+        return "loading"
+
+    if has_apply:
+        return "listing"
+
+    if re.search(
+        r"\b(thank you|application received|successfully submitted)\b",
+        haystack,
+    ):
+        return "confirmation"
+
+    return "unknown"
 
 
 def plan_heuristic(
@@ -162,6 +236,7 @@ def plan_heuristic(
     filled_ids: set[str],
     allow_submit: bool,
     haystack: str,
+    stage: str = "unknown",
 ) -> AgentAction:
 
     sso = _find_sso_button(snapshot, filled_ids)
@@ -182,22 +257,24 @@ def plan_heuristic(
             reason="Dismiss cookie banner.",
         )
 
-    if _looks_like_login(snapshot, haystack):
-        return AgentAction(
-            type="blocked",
-            reason=(
-                "This page still needs a login. "
-                "In the open Chrome window, sign in "
-                "(Google account is fine), then click "
-                "Web agent apply again."
-            ),
-        )
+    if stage == "auth" or _looks_like_login(snapshot, haystack):
+        if _find_sso_button(snapshot, filled_ids) is None:
+            return AgentAction(
+                type="blocked",
+                reason=(
+                    "This page still needs a login. "
+                    "In the open Chrome window, sign in "
+                    "(Google account is fine), then click "
+                    "Web agent apply again."
+                ),
+            )
 
     mapped = _plan_mapped_fill(snapshot, packet, filled_ids)
 
     if mapped is not None:
         return mapped
 
+    # Prefer opening the form over giving up.
     for element in snapshot.elements:
         if element.id in filled_ids:
             continue
@@ -211,8 +288,21 @@ def plan_heuristic(
             return AgentAction(
                 type="click",
                 element_id=element.id,
-                reason="Open the next application step.",
+                reason=(
+                    "Open the next application step "
+                    "(Apply / Continue). Fields often appear after this."
+                ),
             )
+
+    if stage in {"loading", "gate", "listing"}:
+        return AgentAction(
+            type="wait",
+            value="2500",
+            reason=(
+                "Waiting for the page to finish loading "
+                "or for the application form to appear."
+            ),
+        )
 
     if allow_submit:
         for element in snapshot.elements:
@@ -228,10 +318,8 @@ def plan_heuristic(
     return AgentAction(
         type="done",
         reason=(
-            "Your profile JSON is ready, but this webpage "
-            "has no more boxes I can match (name/email/phone/"
-            "resume). Click Apply in Chrome if the form is "
-            "hidden, then run Web agent apply again."
+            "No Apply button and no fillable profile fields "
+            "are visible on this page yet."
         ),
     )
 
@@ -509,6 +597,7 @@ def plan_with_llm(
     think,
     goal: dict | None = None,
     history: list[str] | None = None,
+    stage: str = "unknown",
 ) -> AgentAction | None:
 
     allowed = {element.id: element for element in snapshot.elements}
@@ -517,7 +606,7 @@ def plan_with_llm(
     }
     listing = []
 
-    for element in snapshot.elements[:70]:
+    for element in snapshot.elements[:80]:
         listing.append(
             f"{element.id} tag={element.tag} type={element.type} "
             f"label={element.label!r} name={element.name!r} "
@@ -527,32 +616,45 @@ def plan_with_llm(
         )
 
     goal = goal or {}
-    history_text = "\n".join((history or [])[-8:]) or "(none)"
+    history_text = "\n".join((history or [])[-10:]) or "(none)"
     facts = json.dumps(packet, ensure_ascii=False)
 
     prompt = f"""
 You are Career-Pilot, an agent applying to a real job in a live browser.
 
 GOAL: Apply for "{goal.get('title') or 'this role'}" at "{goal.get('company') or 'this company'}".
-The browser is already opening the SAVED job page:
+Start URL (already opened):
 {goal.get('start_url') or snapshot.url}
-Do NOT search Naukri. Do NOT type the job title into a search box.
-This job was already found. Stay on this page (or the company apply page it opens).
+
+CURRENT PAGE STAGE: {stage}
+Stages mean:
+- listing: job detail page — look for Apply / Apply on company website / I'm interested
+- gate: Apply/Continue exists but the form is not open yet — click it
+- auth: login / SSO — click Google/Microsoft if available; else blocked
+- form: name/email/phone/resume/questions visible — fill from PROFILE FACTS
+- loading: page still changing — wait
+- confirmation: already submitted — done
+- unknown: inspect elements and choose the best next move
+
+IMPORTANT REALITY OF CAREER SITES:
+Application UIs are multi-step. You often see ONLY an Apply button first.
+Fields appear AFTER you click Apply / Next / Continue.
+Never conclude "no fields" while an Apply/Continue button is visible.
+Never search Naukri or type the job title into a search box.
 
 Use only PROFILE FACTS. Never invent salary, visa, gender, password, OTP, or skills.
 
-Think about the page:
-1. Is this a job listing, login, cookie banner, application form, questionnaire, or confirmation?
-2. What is the ONE best next UI move to get closer to a submitted application?
-3. If the form is open, fill the next empty field from PROFILE FACTS, or upload the resume.
-4. If you only see Apply / Apply on company website / I'm interested / Next, click it.
-5. If Google/Microsoft sign-in is required, click that.
-6. Skip salary, visa, gender, race, password, OTP, and any job-search box.
-   PROFILE FACTS already has name, email, phone, skills, summary, experience.
-   If one box is not in PROFILE FACTS, fill another box instead. type=blocked only
-   for CAPTCHA or a login wall you cannot pass.
-7. element_id MUST be an id from the list (e0, e1, ...), never a label.
-8. Do not submit unless submit is allowed.
+Decide ONE next action:
+1. Cookie banner → click accept.
+2. Login wall with Google/Microsoft → click SSO.
+3. Job listing / gate with Apply → click Apply (or company-site apply).
+4. Form open → fill the next empty profile field, or upload resume.
+5. After fills, click Next / Continue if present.
+6. Skip salary, visa, gender, race, password, OTP, and job-search boxes.
+7. If one question is not in PROFILE FACTS, fill another field instead.
+   type=blocked only for CAPTCHA or a login wall you cannot pass.
+8. element_id MUST be an id from the list (e0, e1, ...).
+9. Do not submit unless submit is allowed. Prefer done when the form is ready.
 
 PROFILE FACTS:
 {facts}
@@ -563,7 +665,7 @@ RECENT STEPS:
 URL: {snapshot.url}
 TITLE: {snapshot.title}
 PAGE TEXT:
-{snapshot.text[:2000]}
+{snapshot.text[:2200]}
 
 CLICKABLE / FILLABLE ELEMENTS:
 {chr(10).join(listing) or '(none visible)'}
@@ -571,9 +673,10 @@ CLICKABLE / FILLABLE ELEMENTS:
 Submit is {'allowed' if allow_submit else 'NOT allowed — leave submit to the human'}.
 
 Return ONLY JSON:
-{{"thought":"short reasoning","type":"fill|click|upload|wait|done|blocked|submit","element_id":"e0","value":"","reason":"what this achieves"}}
+{{"thought":"what stage am I in and why this action","type":"fill|click|upload|wait|done|blocked|submit","element_id":"e0","value":"","reason":"what this achieves"}}
 
 For fill, value must be a PROFILE FACT value or key (email, first_name, phone, ...).
+If the form is still opening, use type=wait with value="2500".
 """.strip()
 
     try:
@@ -602,6 +705,32 @@ For fill, value must be a PROFILE FACT value or key (email, first_name, phone, .
         "submit",
     }:
         return None
+
+    if action_type == "done" and stage in {"listing", "gate", "loading"}:
+        for element in snapshot.elements:
+            if element.id in filled_ids:
+                continue
+
+            blob = _element_blob(element)
+
+            if _is_nav_button(blob) and not _is_submit(blob):
+                return AgentAction(
+                    type="click",
+                    element_id=element.id,
+                    thought=thought,
+                    reason=(
+                        "Form fields are not open yet; "
+                        "clicking Apply/Continue first."
+                    ),
+                )
+
+        if stage == "loading":
+            return AgentAction(
+                type="wait",
+                thought=thought,
+                value="2500",
+                reason="Waiting for the application form to appear.",
+            )
 
     if action_type == "submit" and not allow_submit:
         return AgentAction(
@@ -635,6 +764,21 @@ For fill, value must be a PROFILE FACT value or key (email, first_name, phone, .
             if mapped is not None:
                 mapped.thought = thought
                 return mapped
+
+            # If the model pointed at a label but Apply exists, open the form.
+            for element in snapshot.elements:
+                blob = _element_blob(element)
+
+                if _is_nav_button(blob) and not _is_submit(blob):
+                    return AgentAction(
+                        type="click",
+                        element_id=element.id,
+                        thought=thought,
+                        reason=(
+                            "Could not resolve that control; "
+                            "opening the next Apply step instead."
+                        ),
+                    )
 
             return None
 

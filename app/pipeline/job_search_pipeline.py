@@ -156,34 +156,35 @@ class JobSearchPipeline:
         )
 
         # ---------------------------------------------
-        # 3. Candidate-fit prefilter
+        # 3. Agentic candidate-fit screen
         #
-        # Cheap deterministic/semantic check.
-        # This happens BEFORE the expensive LLM
-        # evaluation.
+        # The chat model reads the profile as written
+        # (including grouped skill lines) and keeps
+        # jobs with real overlap. No skill alias table.
         # ---------------------------------------------
 
         relevant_jobs: list[JobPosting] = []
 
         rejected_by_candidate_fit = 0
+        fit_results = self.candidate_fit_prefilter.screen(
+            candidate,
+            target_jobs,
+            queries=queries,
+            target_profile=target_profile,
+        )
 
         for job in target_jobs:
 
-            fit_result = (
-                self.candidate_fit_prefilter.match(
-                    candidate,
-                    job,
-                )
-            )
+            fit_result = fit_results.get(job.job_id)
 
-            if not fit_result.matched:
+            if fit_result is None or not fit_result.matched:
 
                 rejected_by_candidate_fit += 1
 
                 print(
                     f"Candidate-fit rejected: "
                     f"{job.title} - "
-                    f"{fit_result.reason}"
+                    f"{getattr(fit_result, 'reason', 'no overlap')}"
                 )
 
                 continue
@@ -248,7 +249,9 @@ class JobSearchPipeline:
             application_recommendations.append(
                     recommendation
                 )
-            if self.application_workflow:
+            if (
+                self.application_workflow
+            ):
                 self.application_workflow.enqueue(
                     recommendation
                 )

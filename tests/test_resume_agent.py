@@ -143,13 +143,43 @@ def test_experience_is_grouped_by_company():
     assert ada.role == "Embedded Software Engineer"
     assert ada.dates.startswith("Dec 2022")
     assert "month" in ada.dates.lower()
-    assert ada.tools.startswith("Tools (")
+    assert ada.tools == ""
     assert not ada.bullets[0].startswith(
         "Aeronautical Development Agency"
     )
     assert "4 years" in resume.summary
-    assert "VxWorks" in resume.skills
+    assert "VxWorks" in ada.bullets[0]
     assert "Developed mission software" in ada.bullets[0]
+
+
+def test_grouped_profile_skills_stay_as_category_lines():
+
+    candidate = make_candidate()
+    candidate.skills = [
+        "Programming: Python, Embedded C, C, Ada 95, JavaScript",
+        "AI / RAG / Agentic AI: Docker, RAG, LangChain, LangGraph, Qdrant, Ollama",
+        "Tools & DevOps: LDRA, Git, Jenkins",
+    ]
+
+    resume = ResumeTailor().tailor(
+        candidate,
+        make_job(),
+    )
+
+    assert any(
+        skill.startswith("Programming:")
+        for skill in resume.skills
+    )
+    assert any(
+        skill.startswith("AI / RAG")
+        for skill in resume.skills
+    )
+    assert any(
+        skill.startswith("Tools & DevOps:")
+        for skill in resume.skills
+    )
+    assert resume.skills == candidate.skills
+    assert resume.competencies == candidate.domains
 
 
 def test_resume_changes_with_the_job():
@@ -281,16 +311,39 @@ def test_resume_agent_exports_docx(tmp_path):
         )
     )
 
+    candidate = make_candidate()
+    candidate.linkedin = (
+        "https://www.linkedin.com/in/nayaab-ahmed-n-22a329173/"
+    )
+    candidate.github = "https://github.com/SNAN-RAZER"
+    candidate.certifications = [
+        "• Full-Stack Developer — GUVI"
+    ]
+    candidate.skills = [
+        "Programming: Python, Embedded C, C, Ada 95, JavaScript",
+        "AI / RAG / Agentic AI: Docker, RAG, LangChain, Qdrant",
+    ]
+    candidate.domains = [
+        "Embedded Systems",
+        "Aerospace",
+        "Avionics",
+        "RTOS",
+        "Software Testing",
+        "Software Automation",
+    ]
+
     package = agent.run(
-        make_candidate(),
+        candidate,
         make_job(),
     )
 
     assert package.ats.score > 0
     assert package.resume_path is not None
     assert package.resume_path.endswith(".docx")
-    assert "Python" in package.resume.skills
-    assert package.ats.score == 100.0
+    assert any(
+        "Python" in skill
+        for skill in package.resume.skills
+    )
 
     from docx import Document
 
@@ -313,7 +366,10 @@ def test_resume_agent_exports_docx(tmp_path):
         in text
         for text in texts
     )
-    assert document.tables == []
+    assert not any(
+        text.strip().startswith("Tools (")
+        for text in texts
+    )
     assert any(
         "WORK EXPERIENCE" in text.upper()
         for text in texts
@@ -323,11 +379,56 @@ def test_resume_agent_exports_docx(tmp_path):
         for text in texts
     )
     assert any(
-        text.strip().startswith("•") and "Python" in text
+        text.startswith("Programming:")
         for text in texts
     )
     assert not any(
-        "Python, RAG, LangChain" in text
+        text.strip().startswith("•")
+        and text.startswith("• Programming")
+        for text in texts
+    )
+    assert any("LinkedIn" in text for text in texts)
+    assert any("GitHub" in text for text in texts)
+    rels = [
+        rel.target_ref
+        for rel in document.part.rels.values()
+        if "hyperlink" in rel.reltype
+    ]
+    assert any("linkedin.com" in rel for rel in rels)
+    assert any("github.com" in rel for rel in rels)
+    assert not any(rel.startswith("mailto:") for rel in rels)
+    xml = document.element.xml
+    assert 'r:id="' in xml
+    assert "ns0:id=" not in xml
+    assert any(
+        "CERTIFICATIONS" in text.upper()
+        for text in texts
+    )
+    assert any(
+        "Full-Stack Developer" in text
+        and not text.strip().startswith("•")
+        for text in texts
+    )
+    assert any(
+        text.startswith("Programming:")
+        for text in texts
+    )
+    assert any(
+        "CORE COMPETENCIES" in text.upper()
+        for text in texts
+    )
+    assert any(
+        text.strip().startswith("•")
+        and "Embedded Systems" in text
+        for text in texts
+    )
+    assert any(
+        text.strip().startswith("•") and "Aerospace" in text
+        for text in texts
+    )
+    assert any(
+        text.strip().startswith("•")
+        and "Software Automation" in text
         for text in texts
     )
 

@@ -1,5 +1,5 @@
 from app.models.candidate import CandidateProfile
-from app.resume.skill_match import skill_matches_keyword
+from app.resume.skill_match import skill_atoms
 
 
 class AllowedFacts:
@@ -10,24 +10,23 @@ class AllowedFacts:
     ):
         self.candidate = candidate
 
-        skills = {
-            self.normalize(skill)
-            for skill in candidate.skills
-        }
+        skills = set()
+
+        for skill in candidate.skills:
+            skills.add(self.normalize(skill))
+            skills.update(skill_atoms(skill))
 
         for experience in candidate.experiences:
-            skills.update(
-                self.normalize(item)
-                for item in experience.technologies
-            )
+            for item in experience.technologies:
+                skills.add(self.normalize(item))
+                skills.update(skill_atoms(item))
 
         for project in candidate.projects:
-            skills.update(
-                self.normalize(item)
-                for item in project.technologies
-            )
+            for item in project.technologies:
+                skills.add(self.normalize(item))
+                skills.update(skill_atoms(item))
 
-        self.skills = skills
+        self.skills = {item for item in skills if item}
 
         self.companies = {
             self.normalize(item.company)
@@ -64,14 +63,4 @@ class AllowedFacts:
         if not normalized:
             return False
 
-        if normalized in self.skills:
-            return True
-
-        if len(normalized) <= 2:
-            return False
-
-        return any(
-            skill_matches_keyword(normalized, allowed)
-            for allowed in self.skills
-            if allowed and len(allowed) > 2
-        )
+        return normalized in self.skills

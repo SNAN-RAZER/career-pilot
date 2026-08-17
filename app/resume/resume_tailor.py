@@ -1,3 +1,5 @@
+import re
+
 from app.models.candidate import CandidateProfile
 from app.models.job import JobPosting
 from app.models.tailored_resume import (
@@ -5,12 +7,16 @@ from app.models.tailored_resume import (
     TailoredResume,
 )
 from app.resume.allowed_facts import AllowedFacts
+from app.resume.project_bullets import project_bullets
 from app.resume.grounded_metrics import (
     duration_label,
     tools_line,
 )
 from app.resume.keyword_extractor import extract_keywords
-from app.resume.skill_match import skill_matches_keyword
+from app.resume.skill_match import (
+    skill_atoms,
+    skill_matches_keyword,
+)
 
 MONTHS = [
     "Jan",
@@ -74,24 +80,25 @@ class ResumeTailor:
             project_highlights,
         )
 
-        relevant = [
-            skill
-            for skill in skills
-            if facts.allows_skill(skill)
-            and any(
-                skill_matches_keyword(skill, keyword)
-                for keyword in job_keywords
-            )
-        ]
+        if any(
+            ResumeTailor._is_grouped_skill(skill)
+            for skill in candidate.skills
+        ):
+            relevant = list(candidate.skills)
+        else:
+            relevant = []
 
-        competencies = [
-            domain
-            for domain in candidate.domains
-            if any(
-                skill_matches_keyword(domain, keyword)
-                for keyword in job_keywords
-            )
-        ]
+            for skill in skills:
+                if not facts.allows_skill(skill):
+                    continue
+
+                if any(
+                    skill_matches_keyword(skill, keyword)
+                    for keyword in job_keywords
+                ):
+                    relevant.append(skill)
+
+        competencies = list(candidate.domains)
 
         summary = self._build_summary(
             candidate,
@@ -102,7 +109,7 @@ class ResumeTailor:
 
         resume = TailoredResume(
             summary=summary,
-            skills=skills,
+            skills=relevant,
             experiences=experiences,
             experience_highlights=(
                 experience_highlights
@@ -135,14 +142,46 @@ class ResumeTailor:
 
         matched = []
         remaining = []
+        seen = set()
 
         for skill in candidate.skills:
-            if any(
-                skill_matches_keyword(skill, keyword)
-                for keyword in lowered
-            ):
-                matched.append(skill)
-            else:
+            if ResumeTailor._is_grouped_skill(skill):
+                atoms = list(skill_atoms(skill)) or [skill]
+                if any(
+                    skill_matches_keyword(atom, keyword)
+                    for atom in atoms
+                    for keyword in lowered
+                ):
+                    key = skill.lower()
+
+                    if key not in seen:
+                        seen.add(key)
+                        matched.append(skill)
+                else:
+                    remaining.append(skill)
+                continue
+
+            atoms = list(skill_atoms(skill)) or [skill]
+            hit = False
+
+            for atom in atoms:
+                if any(
+                    skill_matches_keyword(atom, keyword)
+                    for keyword in lowered
+                ):
+                    key = atom.lower()
+
+                    if key not in seen:
+                        seen.add(key)
+                        matched.append(
+                            ResumeTailor._original_case(
+                                skill,
+                                atom,
+                            )
+                        )
+                    hit = True
+
+            if not hit:
                 remaining.append(skill)
 
         haystack = " ".join(
@@ -169,6 +208,30 @@ class ResumeTailor:
         return matched + evidenced
 
     @staticmethod
+    def _original_case(source: str, atom: str) -> str:
+
+        lowered = (source or "")
+        target = (atom or "").lower()
+        pattern = (
+            r"(?<![A-Za-z0-9+#./-])"
+            + re.escape(atom)
+            + r"(?![A-Za-z0-9+#./-])"
+        )
+
+        match = re.search(pattern, lowered, re.I)
+
+        if match:
+            return match.group(0)
+
+        return atom
+
+    @staticmethod
+    def _is_grouped_skill(skill: str) -> bool:
+
+        text = str(skill or "")
+        return ":" in text and "," in text.split(":", 1)[-1]
+
+    @staticmethod
     def _add_matching_technologies(
         candidate: CandidateProfile,
         job_keywords: list[str],
@@ -184,6 +247,12 @@ class ResumeTailor:
             for keyword in job_keywords
         ]
         extras = []
+
+        if any(
+            ResumeTailor._is_grouped_skill(skill)
+            for skill in candidate.skills
+        ):
+            return skills
 
         technologies = []
 
@@ -299,26 +368,12 @@ class ResumeTailor:
             if tenure:
                 dates = f"{dates} · {tenure}"
 
-            matched_tools = [
-                tech
-                for tech in experience.technologies
-                if ResumeTailor._keyword_score(
-                    tech,
-                    lowered,
-                ) > 0
-            ]
-
-            if not matched_tools:
-                matched_tools = list(
-                    experience.technologies[:8]
-                )
-
             blocks.append(
                 ResumeExperienceBlock(
                     company=experience.company,
                     role=experience.role,
                     dates=dates,
-                    tools=tools_line(matched_tools),
+                    tools="",
                     bullets=bullets,
                 )
             )
@@ -342,10 +397,6 @@ class ResumeTailor:
                 heading += f" ({block.dates})"
 
             highlights.append(heading)
-
-            if block.tools:
-                highlights.append(block.tools)
-
             highlights.extend(block.bullets)
 
         return highlights
@@ -418,20 +469,19 @@ class ResumeTailor:
                 ]
             ).lower()
 
-            line = (
-                f"{project.name}: "
-                f"{project.description}"
+            line = "\n".join(
+                [
+                    project.name,
+                    *project_bullets(project.description),
+                ]
+            )
+            tools = tools_line(
+                project.technologies,
+                counted=False,
             )
 
-            if project.technologies:
-                line += (
-                    " Stack "
-                    f"({len(project.technologies)}): "
-                    + ", ".join(
-                        project.technologies
-                    )
-                    + "."
-                )
+            if tools:
+                line = f"{line}\n{tools}"
 
             if any(
                 keyword in haystack

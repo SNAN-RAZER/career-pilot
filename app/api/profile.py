@@ -126,7 +126,22 @@ def parse_resume(
         PROFILE_DIR / f"{SOURCE_STEM}.txt"
     ).write_text(text, encoding="utf-8")
 
-    facts = ResumeIngestor().parse_text(text)
+    try:
+        facts, meta = ResumeIngestor().parse_for_preview(
+            text
+        )
+    except RuntimeError as exc:
+        message = str(exc)
+        status = (
+            400
+            if "chat model" in message.lower()
+            else 502
+        )
+        raise HTTPException(
+            status_code=status,
+            detail=message,
+        ) from exc
+
     PREVIEW_PATH.write_text(
         json.dumps(facts, indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -137,9 +152,13 @@ def parse_resume(
         "stored": False,
         "filename": dest.name,
         "facts": facts,
+        "source": meta["source"],
+        "model": meta["model"],
+        "kind": meta["kind"],
         "message": (
-            "Parsed. Review the facts, then click "
-            "Store in profile JSON to update candidate.json."
+            f"Parsed with {meta['kind']} "
+            f"({meta['model']}). Review the facts, "
+            "then click Store in profile JSON."
         ),
     }
 
@@ -175,6 +194,7 @@ def store_parsed_profile():
             facts,
             existing,
         )
+        ingestor.tagger.enrich_profile(profile)
     except ValueError as exc:
         raise HTTPException(
             status_code=400,

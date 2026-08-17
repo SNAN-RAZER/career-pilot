@@ -147,6 +147,41 @@ def test_search_jobs_endpoint():
         )
 
 
+def test_search_jobs_returns_real_error_detail():
+
+    original = (
+        application_dependencies
+        ._job_search_pipeline
+    )
+
+    class BoomPipeline:
+        def run(self, **kwargs):
+            raise RuntimeError(
+                "Could not extract job requirements."
+            )
+
+    application_dependencies._job_search_pipeline = (
+        BoomPipeline()
+    )
+
+    try:
+        response = client.post(
+            "/jobs/search",
+            json={
+                "queries": ["AI Engineer"],
+                "location": "Bangalore",
+            },
+        )
+        assert response.status_code == 502
+        assert "job-description analyzer" in (
+            response.json()["detail"].lower()
+        )
+    finally:
+        application_dependencies._job_search_pipeline = (
+            original
+        )
+
+
 def test_search_jobs_requires_queries():
 
     response = client.post(

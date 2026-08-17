@@ -29,7 +29,9 @@ Rules:
 9. Professional experience is stronger evidence than
    project experience.
 10. Use ONLY the evidence supplied by the application.
-"""
+11. confidence is a fraction from 0.0 to 1.0.
+    Never use a percentage such as 95.
+""".strip()
 
     RESPONSE_SCHEMA = {
         "name": "evidence_judgment",
@@ -113,6 +115,8 @@ YEARS:
 
 Determine whether this evidence genuinely supports
 the job requirement.
+
+confidence must be between 0.0 and 1.0, not 0-100.
 """
 
         response = self.client.chat(
@@ -131,5 +135,29 @@ the job requirement.
         )
 
         return EvidenceJudgment.model_validate(
-            json.loads(response)
+            EvidenceJudge._parse_json(response)
         )
+
+    @staticmethod
+    def _parse_json(raw: str) -> dict:
+
+        text = (raw or "").strip()
+
+        if not text:
+            raise ValueError("Empty evidence judgment.")
+
+        try:
+            loaded = json.loads(text)
+        except json.JSONDecodeError:
+            start = text.find("{")
+            end = text.rfind("}")
+
+            if start < 0 or end <= start:
+                raise
+
+            loaded = json.loads(text[start:end + 1])
+
+        if not isinstance(loaded, dict):
+            raise ValueError("Evidence judgment was not an object.")
+
+        return loaded

@@ -122,6 +122,8 @@ def test_store_maps_facts_into_candidate_json():
                 "bullets": [
                     "Conducted integration testing using LDRA."
                 ],
+                "technologies": ["LDRA", "TensorFlow"],
+                "domains": ["Software Testing"],
             }
         ],
         "education": [
@@ -132,6 +134,16 @@ def test_store_maps_facts_into_candidate_json():
         ],
         "location": "Bangalore",
         "summary": "Python Automation Engineer.",
+        "projects": [
+            {
+                "name": "AI / RAG / KNOWLEDGE GRAPH PROJECT",
+                "bullets": [
+                    "Built a RAG system with Python, LangChain, Qdrant, and Docker."
+                ],
+                "technologies": ["Python", "LangChain", "Qdrant", "Docker", "TensorFlow"],
+                "domains": ["RAG", "FinTech"],
+            }
+        ],
     }
 
     existing = CandidateProfile(
@@ -154,6 +166,13 @@ def test_store_maps_facts_into_candidate_json():
     assert profile.experiences[0].role == (
         "Software Developer"
     )
+    assert profile.experiences[0].technologies == ["LDRA"]
+    assert profile.experiences[0].domains == [
+        "Software Testing"
+    ]
+    assert "TensorFlow" not in (
+        profile.experiences[0].technologies
+    )
     assert profile.target_roles == ["AI Engineer"]
     assert profile.preferred_locations == [
         "Bangalore"
@@ -161,7 +180,64 @@ def test_store_maps_facts_into_candidate_json():
     assert profile.professional_summary == (
         "Python Automation Engineer."
     )
+    assert profile.projects[0].name.startswith("AI")
+    assert profile.projects[0].technologies == [
+        "Python",
+        "LangChain",
+        "Qdrant",
+        "Docker",
+    ]
+    assert profile.projects[0].domains == ["RAG"]
+    assert "TensorFlow" not in profile.projects[0].technologies
     assert profile_gaps(profile) == []
+
+
+def test_store_maps_project_description_string_tags():
+
+    facts = {
+        "name": "Nayaab Ahmed N",
+        "email": "nayaabahmedn@gmail.com",
+        "skills": ["Python"],
+        "experience": [
+            {
+                "company": "Cyient",
+                "title": "Engineer",
+                "bullets": ["Used Python."],
+            }
+        ],
+        "projects": [
+            {
+                "name": "AI RAG project",
+                "description": (
+                    "Built semantic retrieval with Qdrant "
+                    "and LangChain for RAG."
+                ),
+                "technologies": [
+                    "Qdrant",
+                    "LangChain",
+                    "TensorFlow",
+                ],
+                "domains": ["RAG"],
+            }
+        ],
+        "education": [
+            {
+                "degree": "B.E.",
+                "institution": "SVIT",
+            }
+        ],
+    }
+
+    profile = ResumeIngestor().to_profile(facts)
+
+    assert profile.projects[0].description.startswith(
+        "Built semantic retrieval"
+    )
+    assert profile.projects[0].technologies == [
+        "Qdrant",
+        "LangChain",
+    ]
+    assert profile.projects[0].domains == ["RAG"]
 
 
 def test_parse_uses_agent_json_not_heuristic_merge():
@@ -252,6 +328,47 @@ def test_usable_agent_json_is_not_rewritten_by_heuristic():
     assert len(facts["education"]) == 1
 
 
+def test_normalize_keeps_grounded_job_technologies():
+
+    facts = ResumeParseAgent._normalize(
+        {
+            "name": "Nayaab Ahmed N",
+            "experience": [
+                {
+                    "company": "Cyient",
+                    "title": "Engineer",
+                    "start_date": "2024-05",
+                    "end_date": "Present",
+                    "bullets": [
+                        "Built a Python-based LDRA tool."
+                    ],
+                    "technologies": ["Python", "LDRA"],
+                    "domains": ["Software Testing"],
+                }
+            ],
+            "projects": [
+                {
+                    "name": "RAG project",
+                    "bullets": [
+                        "Used Python and Qdrant for RAG."
+                    ],
+                    "technologies": ["Python", "Qdrant"],
+                    "domains": ["RAG"],
+                }
+            ],
+        }
+    )
+
+    assert facts["experience"][0]["technologies"] == [
+        "Python",
+        "LDRA",
+    ]
+    assert facts["projects"][0]["technologies"] == [
+        "Python",
+        "Qdrant",
+    ]
+
+
 def test_agent_rejects_tool_call_name():
 
     assert ResumeParseAgent._is_fake_name(
@@ -299,3 +416,43 @@ def test_profile_gaps_for_empty_profile():
             experiences=[],
         )
     ) == ["experiences"]
+
+
+def test_parse_for_preview_requires_chat_model(monkeypatch):
+
+    ingestor = ResumeIngestor()
+    ingestor.llm.llm_model = ""
+
+    try:
+        ingestor.parse_for_preview(SAMPLE)
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as exc:
+        assert "chat model" in str(exc).lower()
+
+
+def test_parse_for_preview_uses_agent_not_heuristic():
+
+    payload = {
+        "name": "Nayaab Ahmed N",
+        "email": "nayaabahmedn@gmail.com",
+        "skills": ["Python"],
+        "experience": [
+            {
+                "company": "Cyient",
+                "title": "Engineer",
+                "start_date": "2024-01",
+                "end_date": "Present",
+                "bullets": ["Built tools."],
+            }
+        ],
+    }
+    ingestor = ResumeIngestor()
+    ingestor.llm.llm_model = "hermes3:latest"
+    ingestor.agent.reachable = lambda: True
+    ingestor._llm_extract = lambda _: payload
+    ingestor.tagger.enrich_facts = lambda facts: facts
+    facts, meta = ingestor.parse_for_preview(SAMPLE)
+
+    assert facts["experience"][0]["company"] == "Cyient"
+    assert meta["source"] == "agent"
+    assert meta["model"] == "hermes3:latest"

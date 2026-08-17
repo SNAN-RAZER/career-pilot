@@ -1,4 +1,5 @@
 from app.matching.candidate_fit_prefilter import CandidateFitPreFilter
+from tests.job_fit_stubs import keep_non_java_jobs
 from app.matching.decision_engine import DecisionEngine
 from app.matching.job_evaluator import JobEvaluator
 from app.matching.job_ranker import JobRanker
@@ -167,7 +168,9 @@ def test_candidate_fit_prefilter_runs_before_evaluator():
         target_matcher=TargetMatcher(),
         decision_engine=DecisionEngine(),
         ranker=JobRanker(),
-        candidate_fit_prefilter=CandidateFitPreFilter(),
+        candidate_fit_prefilter=CandidateFitPreFilter(
+            screen=keep_non_java_jobs,
+        ),
     )
 
     result = pipeline.run(
@@ -196,6 +199,7 @@ def test_candidate_fit_rejects_unrelated_job():
             self,
             job,
             profile,
+            queries=None,
         ):
 
             return type(
@@ -222,7 +226,9 @@ def test_candidate_fit_rejects_unrelated_job():
         target_matcher=BroadTargetMatcher(),
         decision_engine=DecisionEngine(),
         ranker=JobRanker(),
-        candidate_fit_prefilter=CandidateFitPreFilter(),
+        candidate_fit_prefilter=CandidateFitPreFilter(
+            screen=keep_non_java_jobs,
+        ),
     )
 
     result = pipeline.run(

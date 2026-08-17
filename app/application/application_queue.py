@@ -148,9 +148,6 @@ class ApplicationQueue:
 
         for recommendation in recommendations:
 
-            if recommendation.recommendation == "REJECT":
-                continue
-
             priority = self._priority(
                 recommendation
             )

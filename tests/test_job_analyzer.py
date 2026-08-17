@@ -94,3 +94,31 @@ def test_job_analyzer():
     assert "pytorch" in preferred_names
     assert "aws" in preferred_names
     assert "docker" in preferred_names
+
+
+def test_analyzer_drops_skills_not_written_in_the_job():
+
+    built = JobAnalyzer._build_requirements(
+        {
+            "required_skills": [
+                "Python",
+                "AWS KIRO",
+                "Spec Driven Development",
+            ],
+            "preferred_skills": [],
+            "domains": [],
+            "required_experience_years": 3,
+            "maximum_experience_years": None,
+            "education_requirements": [],
+            "certifications": [],
+            "hard_requirements": [],
+            "role_type": "engineer",
+        },
+        "Required: Strong Python programming experience.",
+    )
+    names = [
+        item.requirement
+        for item in built.required_skills
+    ]
+
+    assert names == ["Python"]

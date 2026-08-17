@@ -8,6 +8,7 @@ from app.models.candidate import (
     Experience,
     Project,
 )
+from app.profile.experience_tagger import ExperienceTagger
 from app.profile.resume_parse_agent import ResumeParseAgent
 from app.resume.source_document import extract_contact
 
@@ -103,6 +104,7 @@ class ResumeIngestor:
     ):
         self.llm = llm or LMStudioClient()
         self.agent = ResumeParseAgent(self.llm)
+        self.tagger = ExperienceTagger(self.llm)
 
     def parse_text(self, text: str) -> dict:
 
@@ -115,6 +117,42 @@ class ResumeIngestor:
             return self._heuristic_parse(text)
 
         return self._fill_contact(extracted, text)
+
+    def parse_for_preview(self, text: str) -> tuple[dict, dict]:
+
+        model = str(self.llm.llm_model or "").strip()
+
+        if not model:
+            raise RuntimeError(
+                "No chat model selected. Pick a provider "
+                "and model under LLM provider, then parse "
+                "again."
+            )
+
+        if not self.agent.reachable():
+            raise RuntimeError(
+                f"Cannot reach {self.llm.kind} at "
+                f"{self.llm.base_url}. Start the host, "
+                "then parse again."
+            )
+
+        extracted = self._llm_extract(text)
+
+        if not extracted:
+            detail = self.agent.last_error or "no JSON"
+            raise RuntimeError(
+                "Resume parse got no result from "
+                f"{model}: {detail}"
+            )
+
+        facts = self._fill_contact(extracted, text)
+        facts = self.tagger.enrich_facts(facts)
+
+        return facts, {
+            "source": "agent",
+            "model": model,
+            "kind": self.llm.kind,
+        }
 
     def to_profile(
         self,
@@ -140,6 +178,9 @@ class ResumeIngestor:
                 technologies=list(
                     item.get("technologies") or []
                 ),
+                domains=list(
+                    item.get("domains") or []
+                ),
             )
             for item in (
                 ResumeParseAgent._repair_job(
@@ -160,6 +201,12 @@ class ResumeIngestor:
                             item.get("bullets")
                             or item.get("description")
                             or []
+                        ),
+                        "technologies": list(
+                            item.get("technologies") or []
+                        ),
+                        "domains": list(
+                            item.get("domains") or []
                         ),
                     }
                 )
@@ -189,16 +236,30 @@ class ResumeIngestor:
                 bullets = description
                 description = ""
 
+            project = ResumeParseAgent._normalize_project(
+                {
+                    "name": item.get("name") or "Project",
+                    "bullets": bullets,
+                    "description": description,
+                    "technologies": item.get(
+                        "technologies"
+                    ),
+                    "domains": item.get("domains"),
+                }
+            )
             projects.append(
                 Project(
-                    name=str(item.get("name") or "Project"),
+                    name=project["name"] or "Project",
                     description=(
-                        " ".join(bullets)
-                        if bullets
+                        " ".join(project["bullets"])
+                        if project["bullets"]
                         else str(description)
                     ),
                     technologies=list(
-                        item.get("technologies") or []
+                        project.get("technologies") or []
+                    ),
+                    domains=list(
+                        project.get("domains") or []
                     ),
                 )
             )
@@ -1088,6 +1149,8 @@ STRICT RULES:
                 "name": name,
                 "bullets": bullets,
                 "description": " ".join(bullets),
+                "technologies": [],
+                "domains": [],
             }
         ]
 

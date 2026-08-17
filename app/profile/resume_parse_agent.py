@@ -2,6 +2,10 @@ import json
 import re
 
 from app.llm.lmstudio_client import LMStudioClient
+from app.profile.experience_tagger import (
+    ground_domains,
+    ground_technologies,
+)
 
 
 RESUME_SCHEMA = {
@@ -48,6 +52,14 @@ RESUME_SCHEMA = {
                             "type": "array",
                             "items": {"type": "string"},
                         },
+                        "technologies": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "domains": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
                     },
                     "required": [
                         "company",
@@ -55,6 +67,8 @@ RESUME_SCHEMA = {
                         "start_date",
                         "end_date",
                         "bullets",
+                        "technologies",
+                        "domains",
                     ],
                 },
             },
@@ -69,8 +83,21 @@ RESUME_SCHEMA = {
                             "type": "array",
                             "items": {"type": "string"},
                         },
+                        "technologies": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "domains": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
                     },
-                    "required": ["name", "bullets"],
+                    "required": [
+                        "name",
+                        "bullets",
+                        "technologies",
+                        "domains",
+                    ],
                 },
             },
             "education": {
@@ -118,23 +145,32 @@ class ResumeParseAgent:
         llm: LMStudioClient | None = None,
     ):
         self.llm = llm or LMStudioClient()
+        self.last_error = ""
 
     def reachable(self) -> bool:
 
-        try:
-            import requests
-
-            response = requests.get(
-                f"{self.llm.base_url}/models",
-                timeout=3,
-            )
-            return response.ok
-        except Exception:
-            return False
+        return self.llm.reachable()
 
     def extract(self, text: str) -> dict | None:
 
-        if not text.strip() or not self.reachable():
+        self.last_error = ""
+
+        if not text.strip():
+            self.last_error = "Resume text is empty."
+            return None
+
+        if not str(self.llm.llm_model or "").strip():
+            self.last_error = (
+                "No chat model selected. Pick a model "
+                "under LLM provider, then parse again."
+            )
+            return None
+
+        if not self.reachable():
+            self.last_error = (
+                f"Cannot reach {self.llm.kind} at "
+                f"{self.llm.base_url}."
+            )
             return None
 
         last = None
@@ -147,6 +183,10 @@ class ResumeParseAgent:
             )
 
             if not raw:
+                if not self.last_error:
+                    self.last_error = (
+                        "LLM returned an empty response."
+                    )
                 continue
 
             facts = self._normalize(raw)
@@ -196,7 +236,8 @@ class ResumeParseAgent:
                 max_tokens=6000,
                 response_schema=RESUME_SCHEMA,
             )
-        except Exception:
+        except Exception as exc:
+            self.last_error = str(exc)
             return None
 
         return self._parse_json(raw)
@@ -224,16 +265,23 @@ What each field means:
 - experience: paid jobs only. company is an
   employer name (short). title is the job title.
   bullets are achievements under that job.
+  technologies are tools/languages named in
+  those bullets. domains are work areas named
+  or clearly described in those bullets.
   Never put an achievement sentence in company
   or title.
-- projects: personal/side projects, not employers
+- projects: personal/side projects, not employers.
+  technologies and domains come from the project
+  description, not from other jobs.
 - education: every school row, including PU/12th
 - languages, certifications, interests: as written
 - linkedin/github: URL if present, else handle
 
 Copy achievement wording. Join wrapped lines.
 Keep numbers (75%, 200%). Dates as YYYY-MM or
-Present. Do not invent companies, skills, or jobs.
+Present. Do not invent companies, skills, technologies,
+domains, or jobs. If a tool is not named in
+that job's bullets, leave it out of that job.
 Ignore page headers, page numbers, and repeated
 name lines.
 """.strip()
@@ -340,6 +388,65 @@ name lines.
         return ""
 
     @staticmethod
+    def _clean_tag_list(values) -> list[str]:
+
+        if isinstance(values, str):
+            values = [values]
+
+        names = []
+
+        for item in values or []:
+            if not isinstance(item, str):
+                continue
+
+            name = re.sub(r"\s+", " ", item).strip()
+
+            if name:
+                names.append(name)
+
+        return names
+
+    @staticmethod
+    def _normalize_project(item: dict) -> dict:
+
+        bullets = item.get("bullets")
+        description = item.get("description")
+
+        if isinstance(description, list):
+            bullets = description
+            description = ""
+
+        if not isinstance(bullets, list):
+            bullets = []
+
+        bullets = [
+            bullet.strip()
+            for bullet in bullets
+            if isinstance(bullet, str) and bullet.strip()
+        ]
+        blob = "\n".join(bullets)
+
+        if not blob and isinstance(description, str):
+            blob = description
+
+        return {
+            "name": str(item.get("name") or "").strip(),
+            "bullets": bullets,
+            "technologies": ground_technologies(
+                ResumeParseAgent._clean_tag_list(
+                    item.get("technologies")
+                ),
+                blob,
+            ),
+            "domains": ground_domains(
+                ResumeParseAgent._clean_tag_list(
+                    item.get("domains")
+                ),
+                blob,
+            ),
+        }
+
+    @staticmethod
     def _repair_job(job: dict) -> dict:
 
         company = str(job.get("company") or "").strip()
@@ -360,6 +467,19 @@ name lines.
             re.sub(r"\s+", " ", bullet).strip()
             for bullet in job.get("bullets") or []
         ]
+        blob = "\n".join(job["bullets"])
+        job["technologies"] = ground_technologies(
+            ResumeParseAgent._clean_tag_list(
+                job.get("technologies")
+            ),
+            blob,
+        )
+        job["domains"] = ground_domains(
+            ResumeParseAgent._clean_tag_list(
+                job.get("domains")
+            ),
+            blob,
+        )
         return job
 
     @staticmethod
@@ -446,6 +566,12 @@ name lines.
                     if isinstance(bullet, str)
                     and bullet.strip()
                 ],
+                "technologies": ResumeParseAgent._clean_tag_list(
+                    item.get("technologies")
+                ),
+                "domains": ResumeParseAgent._clean_tag_list(
+                    item.get("domains")
+                ),
             }
             experience.append(
                 ResumeParseAgent._repair_job(job)
@@ -535,19 +661,7 @@ name lines.
             ],
             "experience": experience,
             "projects": [
-                {
-                    "name": str(item.get("name") or "").strip(),
-                    "bullets": [
-                        bullet.strip()
-                        for bullet in (
-                            item.get("bullets")
-                            or item.get("description")
-                            or []
-                        )
-                        if isinstance(bullet, str)
-                        and bullet.strip()
-                    ],
-                }
+                ResumeParseAgent._normalize_project(item)
                 for item in extracted.get("projects") or []
                 if isinstance(item, dict)
                 and (

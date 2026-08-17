@@ -79,20 +79,31 @@ def search_jobs(
         candidate
     )
 
-    pipeline = (
-        application_dependencies
-        .get_job_search_pipeline()
-    )
-
-    result = pipeline.run(
-        candidate=candidate,
-        target_profile=target_profile,
-        queries=request.queries,
-        location=request.location,
-        pages=request.pages,
-        experience=request.experience,
-        job_age=request.job_age,
-    )
+    try:
+        result = _run_search(
+            candidate,
+            target_profile,
+            request,
+        )
+    except Exception as exc:
+        if _is_naukri_session_error(exc):
+            application_dependencies.reset_naukri_client()
+            try:
+                result = _run_search(
+                    candidate,
+                    target_profile,
+                    request,
+                )
+            except Exception as retry_exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail=_search_error_detail(retry_exc),
+                ) from retry_exc
+        else:
+            raise HTTPException(
+                status_code=502,
+                detail=_search_error_detail(exc),
+            ) from exc
 
     return JobSearchResponse(
         collected_jobs=result.collected_jobs,
@@ -125,3 +136,64 @@ def search_jobs(
             result.application_recommendations
         ),
     )
+
+
+def _run_search(
+    candidate,
+    target_profile,
+    request: JobSearchRequest,
+):
+
+    pipeline = (
+        application_dependencies
+        .get_job_search_pipeline()
+    )
+
+    return pipeline.run(
+        candidate=candidate,
+        target_profile=target_profile,
+        queries=request.queries,
+        location=request.location,
+        pages=request.pages,
+        experience=request.experience,
+        job_age=request.job_age,
+    )
+
+
+def _is_naukri_session_error(exc: Exception) -> bool:
+
+    text = f"{type(exc).__name__} {exc}".lower()
+
+    return any(
+        token in text
+        for token in (
+            "naukriautherror",
+            "auth error",
+            "no token",
+            "login failed",
+            "unauthorized",
+            "401",
+        )
+    )
+
+
+def _search_error_detail(exc: Exception) -> str:
+
+    message = str(exc).strip() or type(exc).__name__
+
+    if "could not extract job requirements" in message.lower():
+        return (
+            "Search reached Naukri, then the job-description "
+            "analyzer failed. Check that a chat model is "
+            "selected and reachable, then search again."
+        )
+
+    if _is_naukri_session_error(exc):
+        return (
+            "Naukri login or session failed. Credentials in "
+            ".env are present, but Naukri rejected this "
+            "session. Try again; complete MFA in the browser "
+            "if Naukri asks for it."
+        )
+
+    return f"Job search failed: {message}"

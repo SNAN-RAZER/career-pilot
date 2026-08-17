@@ -1,6 +1,7 @@
 from app.matching.candidate_fit_prefilter import (
     CandidateFitPreFilter,
 )
+from tests.job_fit_stubs import keep_non_java_jobs
 from app.matching.decision_engine import DecisionEngine
 from app.matching.job_ranker import JobRanker
 from app.matching.target_matcher import TargetMatcher
@@ -27,7 +28,9 @@ def test_pipeline_builds_application_queue():
         decision_engine=DecisionEngine(),
         ranker=JobRanker(),
         candidate_fit_prefilter=(
-            CandidateFitPreFilter()
+            CandidateFitPreFilter(
+                screen=keep_non_java_jobs,
+            )
         ),
         application_queue=ApplicationQueue(),
     )

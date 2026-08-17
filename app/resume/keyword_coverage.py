@@ -2,7 +2,7 @@ import re
 
 from app.models.candidate import CandidateProfile
 from app.resume.keyword_extractor import extract_keywords
-from app.resume.skill_match import skill_matches_keyword
+from app.resume.skill_match import skill_atoms, skill_matches_keyword
 
 
 def contains_keyword(text: str, keyword: str) -> bool:
@@ -77,19 +77,17 @@ def claimable_keywords(
         f"{job_title} {job_description}"
     )[:40]
 
-    known_skills = [
-        *candidate.skills,
-        *[
-            tech
-            for item in candidate.experiences
-            for tech in item.technologies
-        ],
-        *[
-            tech
-            for item in candidate.projects
-            for tech in item.technologies
-        ],
-    ]
+    known_skills = []
+
+    for skill in candidate.skills:
+        known_skills.append(skill)
+        known_skills.extend(sorted(skill_atoms(skill)))
+
+    for item in candidate.experiences:
+        known_skills.extend(item.technologies)
+
+    for item in candidate.projects:
+        known_skills.extend(item.technologies)
 
     claimable = []
 

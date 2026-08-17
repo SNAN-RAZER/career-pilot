@@ -3,6 +3,49 @@ from app.models.evidence import (
     EvidenceType,
     SkillEvidence,
 )
+from app.models.evidence_judgment import EvidenceJudgment
+
+
+def test_confidence_percent_is_scaled_to_unit_interval():
+
+    judgment = EvidenceJudgment.model_validate(
+        {
+            "supported": True,
+            "confidence": 95,
+            "evidence_strength": "strong",
+            "reason": "Named in professional bullets.",
+        }
+    )
+
+    assert judgment.confidence == 0.95
+
+
+def test_judge_accepts_percent_confidence_from_model():
+
+    class FakeClient:
+        def chat(self, **kwargs):
+            return (
+                '{"supported": true, "confidence": 95, '
+                '"evidence_strength": "strong", '
+                '"reason": "Python is named in the bullets."}'
+            )
+
+    evidence = SkillEvidence(
+        skill="Python",
+        evidence_type=EvidenceType.PROFESSIONAL,
+        source="Cyient",
+        description="Built a Python-based LDRA tool.",
+        technologies=["Python"],
+        domains=["Software Testing"],
+    )
+
+    result = EvidenceJudge(client=FakeClient()).judge(
+        "Python",
+        evidence,
+    )
+
+    assert result.supported is True
+    assert result.confidence == 0.95
 
 
 def test_professional_vxworks_evidence():

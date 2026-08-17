@@ -1,6 +1,8 @@
 from app.matching.decision_engine import DecisionEngine
 from app.matching.job_ranker import JobRanker
 from app.matching.target_matcher import TargetMatcher
+from app.matching.candidate_fit_prefilter import CandidateFitPreFilter
+from tests.job_fit_stubs import keep_non_java_jobs
 from app.models.application_recommendation import (
     ApplicationRecommendation,
 )
@@ -23,6 +25,9 @@ def test_pipeline_creates_application_recommendation():
         target_matcher=TargetMatcher(),
         decision_engine=DecisionEngine(),
         ranker=JobRanker(),
+        candidate_fit_prefilter=CandidateFitPreFilter(
+            screen=keep_non_java_jobs,
+        ),
     )
 
     result = pipeline.run(
@@ -68,6 +73,9 @@ def test_pipeline_recommendation_preserves_job_url():
         target_matcher=TargetMatcher(),
         decision_engine=DecisionEngine(),
         ranker=JobRanker(),
+        candidate_fit_prefilter=CandidateFitPreFilter(
+            screen=keep_non_java_jobs,
+        ),
     )
 
     result = pipeline.run(

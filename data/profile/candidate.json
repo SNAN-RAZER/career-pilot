@@ -20,39 +20,16 @@
     "Machine Learning Researcher"
   ],
   "total_experience_years": 6.0,
-  "professional_summary": "Python Automation Engineer and Embedded Software Engineer with 6 years of experience across Python automation, Embedded C, Ada 95, RTOS, software testing, regression automation, requirements traceability, CI/CD, and aerospace/avionics software. Applies strategic thinking and sound engineering judgment to deliver high-quality automation and validation solutions.",
-  "headline": "Python Automation Engineer | Embedded C | Test Automation | RTOS",
+  "professional_summary": "Python Automation Engineer and Embedded Software Engineer with 6 years of experience across Python automation, Embedded C, Ada 95, RTOS, VxWorks, software testing, regression automation, requirements traceability, CI/CD, and aerospace/avionics software. Applies strategic thinking and sound engineering judgment to deliver high-quality automation and validation solutions.",
+  "headline": "PYTHON AUTOMATION ENGINEER | EMBEDDED C",
   "skills": [
-    "Python",
-    "Embedded C",
-    "C",
-    "Ada 95",
-    "JavaScript",
-    "Git",
-    "Jenkins",
-    "TeamCity",
-    "Octopus Deploy",
-    "LDRA",
-    "DOORS",
-    "VxWorks 7",
-    "Wind River Workbench",
-    "Eclipse RT",
-    "Mission Systems",
-    "Avionics Software",
-    "Docker",
-    "RAG",
-    "Agentic AI",
-    "LLM Applications",
-    "Document Processing",
-    "Vector Search",
-    "Embeddings",
-    "Qdrant",
-    "Knowledge Graphs",
-    "LangChain",
-    "LangGraph",
-    "Ollama",
-    "Prompt Engineering",
-    "Retrieval-Augmented Generation"
+    "Programming: Python, Embedded C, C, Ada 95, JavaScript",
+    "Automation & Testing: Python Automation, Test Automation, Regression Automation, Unit Testing, Integration Testing, HSI Testing, Software Validation",
+    "Requirements & Traceability: DOORS, DOORS Traceability, Requirement-to-Code Traceability, Requirements Verification",
+    "Embedded & RTOS: VxWorks 7, RTOS, Wind River Workbench, Eclipse RT, Mission Systems, Avionics Software",
+    "Tools & DevOps: LDRA, Git, Jenkins, TeamCity, Octopus Deploy, CI/CD, Build Automation",
+    "Data & Parsing: Excel Parsing, Log Parsing, Report Automation, Matplotlib",
+    "AI / RAG / Agentic AI: Docker, RAG, Agentic AI, LLM Applications, Document Processing, Vector Search, Embeddings, Qdrant, Knowledge Graphs, LangChain, LangGraph, Ollama, Prompt Engineering, Retrieval-Augmented Generation"
   ],
   "languages": [
     "English",
@@ -87,8 +64,18 @@
         "Collaborated with cross-functional engineering and testing teams to maintain consistent validation practices and high software-testing standards.",
         "Applied innovative, proactive approaches to requirements traceability by building an engineering RAG and agentic AI workflow covering 5 specialized processing stages—document parsing, requirement extraction, structuring, retrieval, and traceability mapping—for requirements-to-test-case analysis."
       ],
-      "technologies": [],
-      "domains": []
+      "technologies": [
+        "Python",
+        "Embedded C",
+        "LDRA",
+        "DOORS",
+        "Eclipse RT"
+      ],
+      "domains": [
+        "Embedded Systems",
+        "Software Testing",
+        "Software Automation"
+      ]
     },
     {
       "company": "Aeronautical Development Agency",
@@ -100,11 +87,18 @@
         "Developed low-level VxWorks 7 drivers for deterministic mission-data loading from target PCs to mission controllers, supporting pre-flight initialization.",
         "Maintained and optimized mission-critical Embedded C and Ada 95 modules for real-time avionics environments, focusing on performance and reliability.",
         "Authored unit tests in Rational Test RealTime (RTRT) for Ada 95 codebases to support rigorous software validation and aerospace safety requirements.",
-        "Architected a Python-based Document Control Network (DCN) automation solution, accelerating documentation efficiency by 200%.",
-        "Created a Node.js performance dashboard using the VxWorks Node.js API to provide real-time telemetry and mission-system health monitoring."
+        "Architected a Python-based Document Control Network (DCN) automation solution, accelerating documentation efficiency by 200%."
       ],
-      "technologies": [],
-      "domains": []
+      "technologies": [
+        "Ada 95",
+        "VxWorks 7",
+        "Embedded C",
+        "Rational Test RealTime (RTRT)"
+      ],
+      "domains": [
+        "Aerospace",
+        "Avionics"
+      ]
     },
     {
       "company": "Amazon Development Center",
@@ -113,9 +107,11 @@
       "end_date": "June 2021",
       "description": [
         "Built automated analytics dashboards using Matplotlib, increasing operational efficiency by 50% and reducing manual analysis effort.",
-        "Performed competitive benchmarking and product-pricing analysis, applying business judgment to support competitive pricing decisions and reduce pricing errors by 40."
+        "Performed competitive benchmarking and product-pricing analysis, applying business judgment to support competitive pricing decisions and reduce pricing errors by 40%."
       ],
-      "technologies": [],
+      "technologies": [
+        "Matplotlib"
+      ],
       "domains": []
     },
     {
@@ -124,70 +120,52 @@
       "start_date": "December 2018",
       "end_date": "May 2019",
       "description": [
-        "Designed SCADA layouts using Movicon, reducing manual checking effort by 50."
+        "Designed SCADA layouts using Movicon, reducing manual checking effort by 50%."
       ],
-      "technologies": [],
-      "domains": []
-    },
-    {
-      "company": "",
-      "role": "AI / RAG / KNOWLEDGE GRAPH PROJECT",
-      "start_date": null,
-      "end_date": null,
-      "description": [
-        "Developed an agentic AI RAG system for Honda Aircraft requirements-to-test-case traceability, processing requirements and test-case documents through specialized agents for document parsing, requirement extraction, structuring, semantic retrieval, and traceability mapping.",
-        "Implemented a multi-agent document-processing workflow using Python, LangChain, LangGraph, Ollama, Qdrant, embeddings, and prompt-driven structured extraction to connect requirements with relevant test cases.",
-        "Architected the system to process PDF documents containing text, tables, and structured test procedures while retaining document metadata, chunk lineage, and source context for traceability.",
-        "Built semantic retrieval and mapping workflows that identify relationships between requirements and test cases and generate mapping rationale grounded in source documentation.",
-        "Worked on a knowledge-graph-based traceability approach to represent relationships among requirements, test cases, documents, components, and verification evidence for explainable engineering analysis.",
-        "Containerized RAG and AI services with Docker and integrated local LLM inference through Ollama to support an offline engineering knowledge environment without cloud inference dependencies.",
-        "Created multiple specialized agents for document processing, requirement extraction, requirement structuring, retrieval, and requirement-to-test-case mapping, improving separation of concerns and explainability.",
-        "Established vector indexing with Qdrant and embedding-based retrieval for engineering documentation, preserving document-level metadata for downstream traceability.",
-        "Applied chunking, metadata lineage, context preservation, and validation controls to reduce hallucinated requirement identifiers and keep traceability mappings grounded in source documents."
+      "technologies": [
+        "Movicon"
       ],
-      "technologies": [],
-      "domains": []
-    },
-    {
-      "company": "",
-      "role": "EDUCATION",
-      "start_date": null,
-      "end_date": null,
-      "description": [
-        "B.E Electrical & Electronics Engineering (CGPA: 6.67) — Sai Vidya Institute of Technology | 2014 – 2018",
-        "PCMB (88.87%) — Indiranagar Composite PU College | 2013 – 2014"
-      ],
-      "technologies": [],
       "domains": []
     }
   ],
   "projects": [
     {
       "name": "AI / RAG / KNOWLEDGE GRAPH PROJECT",
-      "description": "Developed an agentic AI RAG system for Honda Aircraft requirements-to-test-case traceability, processing requirements and test-case documents through specialized agents for document parsing, requirement extraction, structuring, semantic retrieval, and traceability mapping. Implemented a multi-agent document-processing workflow using Python, LangChain, LangGraph, Ollama, Qdrant, embeddings, and prompt-driven structured extraction to connect requirements with relevant test cases. Architected the system to process PDF documents containing text, tables, and structured test procedures while retaining document metadata, chunk lineage, and source context for traceability. Built semantic retrieval and mapping workflows that identify relationships between requirements and test cases and generate mapping rationale grounded in source documentation. Worked on a knowledge-graph-based traceability approach to represent relationships among requirements, test cases, documents, components, and verification evidence for explainable engineering analysis. Containerized RAG and AI services with Docker and integrated local LLM inference through Ollama to support an offline engineering knowledge environment without cloud inference dependencies. Created multiple specialized agents for document processing, requirement extraction, requirement structuring, retrieval, and requirement-to-test-case mapping, improving separation of concerns and explainability. Established vector indexing with Qdrant and embedding-based retrieval for engineering documentation, preserving document- level metadata for downstream traceability. Applied chunking, metadata lineage, context preservation, and validation controls to reduce hallucinated requirement identifiers and keep traceability mappings grounded in source documents.",
-      "technologies": [],
-      "domains": []
+      "description": "Developed an agentic AI RAG system for Honda Aircraft requirements-to-test-case traceability, processing requirements and test-case documents through specialized agents for document parsing, requirement extraction, structuring, semantic retrieval, and traceability mapping. Implemented a multi-agent document-processing workflow using Python, LangChain, LangGraph, Ollama, Qdrant, embeddings, and prompt-driven structured extraction to connect requirements with relevant test cases. Architected the system to process PDF documents containing text, tables, and structured test procedures while retaining document metadata, chunk lineage, and source context for traceability. Built semantic retrieval and mapping workflows that identify relationships between requirements and test cases and generate mapping rationale grounded in source documentation. Worked on a knowledge-graph-based traceability approach to represent relationships among requirements, test cases, documents, components, and verification evidence for explainable engineering analysis. Containerized RAG and AI services with Docker and integrated local LLM inference through Ollama to support an offline engineering knowledge environment without cloud inference dependencies. Created multiple specialized agents for document processing, requirement extraction, requirement structuring, retrieval, and requirement-to-test-case mapping, improving separation of concerns and explainability. Established vector indexing with Qdrant and embedding-based retrieval for engineering documentation, preserving document-level metadata for downstream traceability. Applied chunking, metadata lineage, context preservation, and validation controls to reduce hallucinated requirement identifiers and keep traceability mappings grounded in source documents.",
+      "technologies": [
+        "Python",
+        "LangChain",
+        "LangGraph",
+        "Ollama",
+        "Qdrant",
+        "Docker"
+      ],
+      "domains": [
+        "AI",
+        "RAG",
+        "Knowledge Graphs"
+      ]
     }
   ],
   "education": [
     {
       "degree": "B.E Electrical & Electronics Engineering",
       "institution": "Sai Vidya Institute of Technology",
-      "year": "2014-2018"
+      "year": "2014 - 2018"
     },
     {
       "degree": "PCMB",
       "institution": "Indiranagar Composite PU College",
-      "year": "2013-2014"
+      "year": "2013 - 2014"
     }
   ],
   "certifications": [
-    "Full-Stack Developer - GUVI"
+    "• Full-Stack Developer — GUVI"
   ],
   "preferred_locations": [
     "Bangalore, India"
   ],
   "remote_preference": "preferred",
-  "linkedin": "https://www.linkedin.com/in/nayaab-ahmed-n-22a329173",
+  "linkedin": "https://www.linkedin.com/in/nayaab-ahmed-n-22a329173/",
   "github": "https://github.com/SNAN-RAZER"
 }

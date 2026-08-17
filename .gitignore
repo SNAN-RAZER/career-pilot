@@ -11,4 +11,5 @@ wheels/
 .env
 data/applications.json
 data/browser/
+data/llm/settings.json
 third_party/NopeRi/

@@ -56,6 +56,10 @@ class ApplicationDashboard:
         if application.status == "PENDING":
             if application.tailored_resume is None:
                 next_action = "TAILOR"
+            elif application.recommendation == "REVIEW":
+                next_action = "REVIEW"
+            elif application.recommendation == "REJECT":
+                next_action = "APPLY"
             else:
                 next_action = "APPLY"
         elif application.status == "APPLIED":

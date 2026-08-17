@@ -1,10 +1,12 @@
 from inspect import isawaitable
+
 from pydantic import BaseModel, Field
 
 from app.application.applicant_packet import (
     build_applicant_packet,
 )
 from app.application.web_apply_planner import (
+    classify_page_stage,
     plan_next_action,
 )
 from app.application.web_browser import (
@@ -24,6 +26,7 @@ class WebApplyReport(BaseModel):
     filled: list[str] = Field(default_factory=list)
     steps: list[str] = Field(default_factory=list)
     thoughts: list[str] = Field(default_factory=list)
+    stages: list[str] = Field(default_factory=list)
     message: str
     submitted: bool = False
 
@@ -34,7 +37,7 @@ class WebApplyAgent:
         self,
         browser: BrowserSession | None = None,
         headed: bool = True,
-        max_steps: int = 40,
+        max_steps: int = 50,
     ):
         self.browser = browser
         self.headed = headed
@@ -57,20 +60,25 @@ class WebApplyAgent:
         except Exception:
             return ""
 
+        if not str(self.llm.llm_model or "").strip():
+            return ""
+
         return self.llm.chat(
             [
                 {
                     "role": "system",
                     "content": (
                         "You are Career-Pilot, a browser agent that "
-                        "applies to jobs. Think about the page, then "
-                        "return one JSON action. No tool calls. "
-                        "Never invent candidate facts."
+                        "applies to jobs on live career sites. "
+                        "Application pages are multi-step: listing, "
+                        "Apply button, login, then form fields. "
+                        "Decide the next UI action from what you see. "
+                        "Never invent candidate facts. Return JSON only."
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=800,
+            max_tokens=900,
         )
 
     async def _use(self, method, *args):
@@ -105,7 +113,10 @@ class WebApplyAgent:
         filled_fields: list[str] = []
         steps: list[str] = []
         thoughts: list[str] = []
+        stages: list[str] = []
         last_url = ""
+        last_signature = ""
+        idle_rounds = 0
         goal = {
             "title": job_title,
             "company": company,
@@ -116,15 +127,22 @@ class WebApplyAgent:
             await self._use(browser.goto, apply_url)
             await self._use(browser.wait, 2000)
             current_url = apply_url
-            stalled = 0
 
             for _ in range(self.max_steps):
                 snapshot = await self._use(browser.snapshot)
                 current_url = snapshot.url
+                stage = classify_page_stage(snapshot)
+                stages.append(stage)
+                signature = (
+                    f"{snapshot.url}|{stage}|"
+                    f"{len(snapshot.elements)}|"
+                    f"{(snapshot.title or '')[:80]}"
+                )
 
                 if snapshot.url != last_url:
                     filled_ids = set()
                     last_url = snapshot.url
+                    idle_rounds = 0
 
                 action = plan_next_action(
                     snapshot,
@@ -134,12 +152,14 @@ class WebApplyAgent:
                     think=self._think if self.use_llm else None,
                     goal=goal,
                     history=steps,
+                    stage=stage,
                 )
+
                 if action.thought:
                     thoughts.append(action.thought)
 
                 steps.append(
-                    f"{action.type}: {action.reason}"
+                    f"[{stage}] {action.type}: {action.reason}"
                 )
 
                 if action.type == "blocked":
@@ -150,13 +170,23 @@ class WebApplyAgent:
                         filled=filled_fields,
                         steps=steps,
                         thoughts=thoughts,
+                        stages=stages,
                         message=action.reason,
                     )
 
                 if action.type == "done":
-                    if not filled_fields and stalled < 2:
-                        stalled += 1
-                        await self._use(browser.wait, 2000)
+                    if signature == last_signature:
+                        idle_rounds += 1
+                    else:
+                        idle_rounds = 0
+                        last_signature = signature
+
+                    if idle_rounds < 2 and stage in {
+                        "listing",
+                        "gate",
+                        "loading",
+                    }:
+                        await self._use(browser.wait, 2500)
                         continue
 
                     return WebApplyReport(
@@ -170,27 +200,29 @@ class WebApplyAgent:
                         filled=filled_fields,
                         steps=steps,
                         thoughts=thoughts,
+                        stages=stages,
                         message=(
                             action.reason
                             if filled_fields
                             else (
-                                "I already have your profile JSON and "
-                                "tailored resume. This website page did "
-                                "not show fillable name/email/phone "
-                                "boxes. Click Apply in the Chrome "
-                                "window so the form appears, then run "
-                                "Web agent apply again."
+                                "I opened the job page and looked for "
+                                "Apply / form fields. Nothing more was "
+                                "clickable or fillable from this page "
+                                f"state ({stage}). Check the Chrome "
+                                "window and run Web agent apply again "
+                                "if a form appeared."
                             )
                         ),
                     )
 
                 if action.type == "wait":
-                    milliseconds = 1500
+                    milliseconds = 2000
 
                     if action.value and str(action.value).isdigit():
                         milliseconds = int(action.value)
 
                     await self._use(browser.wait, milliseconds)
+                    last_signature = signature
                     continue
 
                 if action.type == "fill" and action.element_id:
@@ -209,6 +241,7 @@ class WebApplyAgent:
 
                     filled_ids.add(action.element_id)
                     filled_fields.append(action.reason)
+                    last_signature = signature
                     continue
 
                 if action.type == "upload" and action.element_id:
@@ -230,6 +263,7 @@ class WebApplyAgent:
 
                     filled_ids.add(action.element_id)
                     filled_fields.append("resume")
+                    last_signature = signature
                     continue
 
                 if action.type in {"click", "submit"} and action.element_id:
@@ -244,7 +278,12 @@ class WebApplyAgent:
                         )
                         filled_ids.add(action.element_id)
                         continue
+
                     filled_ids.add(action.element_id)
+                    # New page / modal / form may appear after click.
+                    filled_ids = set()
+                    last_signature = ""
+                    idle_rounds = 0
 
                     if action.type == "submit":
                         return WebApplyReport(
@@ -254,17 +293,22 @@ class WebApplyAgent:
                             filled=filled_fields,
                             steps=steps,
                             thoughts=thoughts,
+                            stages=stages,
                             message="Clicked submit on the company form.",
                             submitted=True,
                         )
 
+                    await self._use(browser.wait, 1200)
+                    continue
+
             return WebApplyReport(
-                status="filled",
+                status="filled" if filled_fields else "needs_review",
                 apply_url=apply_url,
                 current_url=current_url,
                 filled=filled_fields,
                 steps=steps,
                 thoughts=thoughts,
+                stages=stages,
                 message=(
                     "Stopped after the step limit. "
                     "Review the open browser window."

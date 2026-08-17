@@ -13,6 +13,40 @@ import "./App.css";
 const API_BASE_URL = "http://127.0.0.1:8000";
 const MIN_MATCH_SCORE = 80;
 
+function searchFailureMessage(err) {
+  const detail = err.response?.data?.detail;
+
+  if (typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map((item) => item.msg || JSON.stringify(item))
+      .join("; ");
+  }
+
+  if (err.code === "ECONNABORTED") {
+    return (
+      "Search timed out while ranking jobs. "
+      + "Keep the API running and try 1 page."
+    );
+  }
+
+  if (!err.response) {
+    return (
+      "Cannot reach the API at 127.0.0.1:8000. "
+      + "Start uvicorn, then search again."
+    );
+  }
+
+  return (
+    "Job search failed ("
+    + err.response.status
+    + "). Check the API terminal for the traceback."
+  );
+}
+
 const DUMMY_COMPANIES = new Set([
   "API Test Company",
   "AI Company",
@@ -58,9 +92,20 @@ function App() {
   const [sourceResume, setSourceResume] = useState("");
   const [profileStatus, setProfileStatus] = useState(null);
   const [parsedFacts, setParsedFacts] = useState(null);
+  const [parseMeta, setParseMeta] = useState(null);
   const [profileBusy, setProfileBusy] = useState(false);
-  const [allowSearchAnyway, setAllowSearchAnyway] =
-    useState(false);
+  const [llmSettings, setLlmSettings] = useState(null);
+  const [llmModels, setLlmModels] = useState([]);
+  const [llmEmbedModels, setLlmEmbedModels] = useState([]);
+  const [llmModelsError, setLlmModelsError] = useState("");
+  const [llmBusy, setLlmBusy] = useState(false);
+  const [llmForm, setLlmForm] = useState({
+    kind: "custom",
+    label: "",
+    base_url: "",
+    api_key: "",
+    chat_model: "",
+  });
 
   const [searchForm, setSearchForm] = useState({
     role: "",
@@ -74,7 +119,215 @@ function App() {
     loadApplications();
     loadSourceResume();
     loadProfileStatus();
+    loadLlmSettings();
   }, []);
+
+  async function loadLlmSettings() {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/llm/settings`
+      );
+      setLlmSettings(response.data);
+      const activeId = response.data.active_id;
+
+      if (activeId) {
+        await loadLlmModels(activeId);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function loadLlmModels(providerId) {
+    if (!providerId) {
+      setLlmModels([]);
+      setLlmEmbedModels([]);
+      return { models: [], embedding_models: [] };
+    }
+
+    setLlmModelsError("");
+
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/llm/providers/${providerId}/models`
+      );
+      const models = response.data.models || [];
+      const embeddingModels =
+        response.data.embedding_models || [];
+      setLlmModels(models);
+      setLlmEmbedModels(embeddingModels);
+
+      if (!models.length) {
+        setLlmModelsError(
+          "No chat models found. Start Ollama or LM Studio, then refresh."
+        );
+      }
+
+      return {
+        models,
+        embedding_models: embeddingModels,
+      };
+    } catch (err) {
+      setLlmModels([]);
+      setLlmEmbedModels([]);
+      setLlmModelsError(
+        err.response?.data?.detail
+        || "Could not list models from that host."
+      );
+      return { models: [], embedding_models: [] };
+    }
+  }
+
+  async function activateLlm(
+    providerId,
+    chatModel,
+    embeddingModel
+  ) {
+    const model = (
+      chatModel
+      || llmSettings?.active?.chat_model
+      || ""
+    ).trim();
+    const embedding = (
+      embeddingModel
+      || llmSettings?.active?.embedding_model
+      || ""
+    ).trim();
+
+    if (!providerId || !model) {
+      return;
+    }
+
+    setLlmSettings((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const providers = (current.providers || []).map(
+        (item) =>
+          item.id === providerId
+            ? {
+                ...item,
+                chat_model: model,
+                embedding_model: embedding || item.embedding_model,
+              }
+            : item
+      );
+      const active = providers.find(
+        (item) => item.id === providerId
+      ) || {
+        ...(current.active || {}),
+        id: providerId,
+        chat_model: model,
+        embedding_model: embedding,
+      };
+
+      return {
+        ...current,
+        active_id: providerId,
+        active,
+        providers,
+      };
+    });
+    setLlmBusy(true);
+
+    try {
+      await axios.post(
+        `${API_BASE_URL}/llm/activate`,
+        {
+          provider_id: providerId,
+          chat_model: model,
+          embedding_model: embedding || undefined,
+        }
+      );
+      await loadLlmSettings();
+    } catch (err) {
+      alert(
+        err.response?.data?.detail
+        || "Could not activate that LLM."
+      );
+      await loadLlmSettings();
+    } finally {
+      setLlmBusy(false);
+    }
+  }
+
+  async function saveLlmProvider(event) {
+    event.preventDefault();
+    setLlmBusy(true);
+
+    try {
+      const saved = await axios.post(
+        `${API_BASE_URL}/llm/providers`,
+        llmForm
+      );
+      const model = (
+        llmForm.chat_model
+        || saved.data.chat_model
+        || ""
+      ).trim();
+
+      if (model) {
+        await axios.post(
+          `${API_BASE_URL}/llm/activate`,
+          {
+            provider_id: saved.data.id,
+            chat_model: model,
+          }
+        );
+      }
+      setLlmForm({
+        kind: "custom",
+        label: "",
+        base_url: "",
+        api_key: "",
+        chat_model: "",
+      });
+      await loadLlmSettings();
+    } catch (err) {
+      alert(
+        err.response?.data?.detail
+        || "Could not save that LLM provider."
+      );
+    } finally {
+      setLlmBusy(false);
+    }
+  }
+
+  function llmKindDefaults(kind) {
+    if (kind === "lmstudio") {
+      return {
+        label: "LM Studio",
+        base_url: "http://localhost:1234/v1",
+      };
+    }
+
+    if (kind === "ollama") {
+      return {
+        label: "Ollama",
+        base_url: "http://localhost:11434/v1",
+      };
+    }
+
+    if (kind === "openai") {
+      return {
+        label: "OpenAI",
+        base_url: "https://api.openai.com/v1",
+      };
+    }
+
+    if (kind === "anthropic") {
+      return {
+        label: "Anthropic",
+        base_url: "https://api.anthropic.com/v1",
+      };
+    }
+
+    return {
+      label: "Custom API",
+      base_url: "",
+    };
+  }
 
   async function loadProfileStatus() {
     try {
@@ -121,6 +374,8 @@ function App() {
     const body = new FormData();
     body.append("resume_file", file);
     setProfileBusy(true);
+    setParsedFacts(null);
+    setParseMeta(null);
 
     try {
       const response = await axios.post(
@@ -128,6 +383,11 @@ function App() {
         body
       );
       setParsedFacts(response.data.facts);
+      setParseMeta({
+        source: response.data.source,
+        model: response.data.model,
+        kind: response.data.kind,
+      });
       setSourceResume(response.data.filename);
       await loadProfileStatus();
     } catch (err) {
@@ -135,6 +395,7 @@ function App() {
         err.response?.data?.detail
         || "Could not parse that resume file."
       );
+      await loadProfileStatus();
     } finally {
       setProfileBusy(false);
       event.target.value = "";
@@ -217,7 +478,8 @@ function App() {
           pages: searchForm.pages,
           experience: searchForm.experience,
           job_age: searchForm.jobAge,
-        }
+        },
+        { timeout: 600000 }
       );
 
       setSearchResults(response.data);
@@ -226,10 +488,7 @@ function App() {
       await loadApplications();
     } catch (err) {
       console.error(err);
-      setSearchError(
-        err.response?.data?.detail
-          || "Job search failed. Check API and Naukri credentials."
-      );
+      setSearchError(searchFailureMessage(err));
     } finally {
       setSearching(false);
     }
@@ -458,8 +717,13 @@ function App() {
         <div>
           <h1>Career-Pilot</h1>
           <p>
-            AI-powered job search and application
-            management
+            {llmSettings?.active
+              ? `${llmSettings.active.label}${
+                  llmSettings.active.chat_model
+                    ? ` · ${llmSettings.active.chat_model}`
+                    : ""
+                }`
+              : "AI-powered job search and application management"}
           </p>
         </div>
 
@@ -473,6 +737,280 @@ function App() {
       </header>
 
       <main className="dashboard">
+        <section className="search-section">
+          <div className="section-header">
+            <div>
+              <h2>LLM provider</h2>
+              <p>
+                Use one chat model at a time from
+                LM Studio, Ollama, OpenAI, Anthropic,
+                or any URL + API key.
+              </p>
+            </div>
+          </div>
+
+          {llmSettings?.active && (
+            <p className="search-summary">
+              Active: {llmSettings.active.label}
+              {llmSettings.active.chat_model
+                ? ` · ${llmSettings.active.chat_model}`
+                : " · no model selected"}
+              {llmSettings.active.embedding_model
+                ? ` · embed ${llmSettings.active.embedding_model}`
+                : " · no embedding model"}
+              {` · ${llmSettings.active.base_url}`}
+              {llmModels.length
+                ? ` · ${llmModels.length} models`
+                : ""}
+            </p>
+          )}
+          {llmModelsError && (
+            <p className="search-summary">{llmModelsError}</p>
+          )}
+
+          <div className="search-form llm-provider-row">
+            <label>
+              Provider
+              <select
+                value={llmSettings?.active_id || ""}
+                disabled={llmBusy}
+                onChange={async (event) => {
+                  const id = event.target.value;
+                  const provider = (
+                    llmSettings?.providers || []
+                  ).find((item) => item.id === id);
+                  const listed = await loadLlmModels(id);
+                  const model = (
+                    provider?.chat_model
+                    || listed.models[0]
+                    || ""
+                  ).trim();
+                  const embedding = (
+                    provider?.embedding_model
+                    || listed.embedding_models[0]
+                    || ""
+                  ).trim();
+
+                  if (!model) {
+                    alert(
+                      "No chat model on that host. Start Ollama or LM Studio, then pick a model."
+                    );
+                    return;
+                  }
+
+                  await activateLlm(id, model, embedding);
+                }}
+              >
+                {(llmSettings?.providers || []).map(
+                  (provider) => (
+                    <option
+                      key={provider.id}
+                      value={provider.id}
+                    >
+                      {provider.label} ({provider.kind})
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+
+            <label>
+              Chat model
+              <select
+                value={
+                  llmSettings?.active?.chat_model || ""
+                }
+                disabled={llmBusy || !llmSettings?.active_id}
+                onChange={(event) => {
+                  const model = event.target.value.trim();
+
+                  if (!model) {
+                    return;
+                  }
+
+                  activateLlm(
+                    llmSettings.active_id,
+                    model
+                  );
+                }}
+              >
+                <option value="">
+                  {llmModels.length
+                    ? `Select from ${llmModels.length} hosted models`
+                    : "No hosted models yet"}
+                </option>
+                {llmModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+                {llmSettings?.active?.chat_model
+                  && !llmModels.includes(
+                    llmSettings.active.chat_model
+                  ) && (
+                  <option
+                    value={llmSettings.active.chat_model}
+                  >
+                    {llmSettings.active.chat_model}
+                  </option>
+                )}
+              </select>
+            </label>
+
+            <label>
+              Embedding model
+              <select
+                value={
+                  llmSettings?.active?.embedding_model || ""
+                }
+                disabled={llmBusy || !llmSettings?.active_id}
+                onChange={(event) => {
+                  const model = event.target.value.trim();
+
+                  if (!model) {
+                    return;
+                  }
+
+                  activateLlm(
+                    llmSettings.active_id,
+                    llmSettings.active?.chat_model,
+                    model
+                  );
+                }}
+              >
+                <option value="">
+                  {llmEmbedModels.length
+                    ? `Select from ${llmEmbedModels.length} embedding models`
+                    : "No embedding models yet"}
+                </option>
+                {llmEmbedModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+                {llmSettings?.active?.embedding_model
+                  && !llmEmbedModels.includes(
+                    llmSettings.active.embedding_model
+                  ) && (
+                  <option
+                    value={llmSettings.active.embedding_model}
+                  >
+                    {llmSettings.active.embedding_model}
+                  </option>
+                )}
+              </select>
+            </label>
+
+            <button
+              type="button"
+              className="ghost-button"
+              disabled={llmBusy || !llmSettings?.active_id}
+              onClick={() =>
+                loadLlmModels(llmSettings.active_id)
+              }
+            >
+              Refresh models
+            </button>
+          </div>
+
+          <form
+            className="search-form"
+            onSubmit={saveLlmProvider}
+          >
+            <label>
+              Kind
+              <select
+                value={llmForm.kind}
+                onChange={(event) => {
+                  const kind = event.target.value;
+                  const defaults = llmKindDefaults(kind);
+                  setLlmForm({
+                    ...llmForm,
+                    kind,
+                    label: defaults.label,
+                    base_url: defaults.base_url
+                      || llmForm.base_url,
+                  });
+                }}
+              >
+                <option value="lmstudio">LM Studio</option>
+                <option value="ollama">Ollama</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="custom">
+                  Custom OpenAI-compatible
+                </option>
+              </select>
+            </label>
+
+            <label>
+              Label
+              <input
+                value={llmForm.label}
+                onChange={(event) =>
+                  setLlmForm({
+                    ...llmForm,
+                    label: event.target.value,
+                  })
+                }
+                placeholder="Work OpenAI"
+              />
+            </label>
+
+            <label>
+              Base URL
+              <input
+                value={llmForm.base_url}
+                onChange={(event) =>
+                  setLlmForm({
+                    ...llmForm,
+                    base_url: event.target.value,
+                  })
+                }
+                placeholder="https://api.openai.com/v1"
+                required
+              />
+            </label>
+
+            <label>
+              API key
+              <input
+                type="password"
+                value={llmForm.api_key}
+                onChange={(event) =>
+                  setLlmForm({
+                    ...llmForm,
+                    api_key: event.target.value,
+                  })
+                }
+                placeholder="optional for local hosts"
+              />
+            </label>
+
+            <label>
+              Model id
+              <input
+                value={llmForm.chat_model}
+                onChange={(event) =>
+                  setLlmForm({
+                    ...llmForm,
+                    chat_model: event.target.value,
+                  })
+                }
+                placeholder="gpt-4o-mini"
+              />
+            </label>
+
+            <button
+              type="submit"
+              className="search-button"
+              disabled={llmBusy}
+            >
+              {llmBusy ? "Saving..." : "Save & use"}
+            </button>
+          </form>
+        </section>
+
         <section className="search-section">
           <div className="section-header">
             <div>
@@ -507,7 +1045,7 @@ function App() {
           <div className="application-actions">
             <label className="action-button tailor">
               {profileBusy
-                ? "Parsing..."
+                ? "Parsing with LLM..."
                 : "1. Parse resume"}
               <input
                 type="file"
@@ -545,6 +1083,11 @@ function App() {
           {parsedFacts && (
             <div className="resume-preview">
               <h4>Parsed preview (not stored yet)</h4>
+              {parseMeta?.model && (
+                <p>
+                  {`Via ${parseMeta.kind} · ${parseMeta.model}`}
+                </p>
+              )}
               <p>
                 {parsedFacts.name || "No name"}
                 {parsedFacts.email
@@ -554,6 +1097,8 @@ function App() {
               <p>
                 {(parsedFacts.experience || []).length}
                 {" jobs · "}
+                {(parsedFacts.projects || []).length}
+                {" projects · "}
                 {(parsedFacts.skills || []).length}
                 {" skills"}
               </p>
@@ -566,6 +1111,23 @@ function App() {
                         {job.title || job.role || "Role"}
                         {job.company
                           ? ` · ${job.company}`
+                          : ""}
+                        {(job.technologies || []).length
+                          ? ` · ${(job.technologies || []).slice(0, 6).join(", ")}`
+                          : ""}
+                      </li>
+                    ))}
+                </ul>
+              )}
+              {(parsedFacts.projects || []).length > 0 && (
+                <ul>
+                  {(parsedFacts.projects || [])
+                    .slice(0, 4)
+                    .map((project, index) => (
+                      <li key={`${project.name}-${index}`}>
+                        {project.name || "Project"}
+                        {(project.technologies || []).length
+                          ? ` · ${(project.technologies || []).slice(0, 6).join(", ")}`
                           : ""}
                       </li>
                     ))}
@@ -693,7 +1255,7 @@ function App() {
                     ? `Naukri returned ${searchResults.collected_jobs} · ${searchResults.relevant_jobs} passed filters · dropped ${
                         (searchResults.rejected_by_target || 0)
                         + (searchResults.rejected_by_candidate_fit || 0)
-                      } · ${searchResults.applications_queued} queued`
+                      } (title ${searchResults.rejected_by_target || 0}, skills ${searchResults.rejected_by_candidate_fit || 0}) · ${searchResults.applications_queued} queued`
                     : "Run a search to rank live Naukri jobs."}
                 </p>
               </div>
@@ -770,10 +1332,10 @@ function App() {
               <div>
                 <h2>Stored jobs</h2>
                 <p>
-                  Apply to all runs every APPLY job at
-                  ≥ {MIN_MATCH_SCORE}% match. Easy Apply
-                  first, then web-agent fallback. A
-                  failed job does not stop the rest.
+                  Apply to all only runs APPLY jobs at
+                  ≥ {MIN_MATCH_SCORE}% match. REJECT
+                  jobs are stored so you can still
+                  tailor or apply one by one.
                 </p>
               </div>
               <div className="application-actions">
@@ -1113,7 +1675,7 @@ function ApplicationCard({
               === loadingKey("web-apply")
             }
             title={
-              "Agent reads the live page, thinks, then clicks/fills using only your profile JSON. Needs LM Studio running."
+              "Agent observes the live page stage (listing → Apply → form), thinks, then clicks/fills using only your profile JSON. Needs Ollama/LM Studio running."
             }
             onClick={() =>
               onAction(jobId, "web-apply")

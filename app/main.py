@@ -13,6 +13,9 @@ from app.api.jobs import (
 from app.api.profile import (
     router as profile_router,
 )
+from app.api.llm import (
+    router as llm_router,
+)
 from app.profile.profile_manager import (
     ProfileManager,
 )
@@ -76,6 +79,9 @@ app.include_router(
 )
 app.include_router(
     profile_router
+)
+app.include_router(
+    llm_router
 )
 
 

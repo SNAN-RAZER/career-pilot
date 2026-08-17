@@ -1,14 +1,17 @@
 from pathlib import Path
+import re
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.oxml import OxmlElement, parse_xml
+from docx.oxml.ns import nsdecls, qn
 from docx.shared import Inches, Pt, RGBColor
 
 from app.models.candidate import CandidateProfile
 from app.models.job import JobPosting
 from app.models.tailored_resume import TailoredResume
+from app.resume.project_bullets import project_bullets
 
 
 NAVY = RGBColor(0x1F, 0x2A, 0x44)
@@ -45,17 +48,23 @@ class ResumeExporter:
         self._add_body(document, resume.summary)
 
         self._add_section(document, "Technical Skills")
-        self._add_skills(document, resume.skills)
+        self._add_skills(
+            document,
+            candidate.skills or resume.skills,
+        )
 
-        if resume.competencies:
+        domains = candidate.domains or resume.competencies
+
+        if domains:
             self._add_section(
                 document,
                 "Core Competencies",
             )
-            self._add_body(
-                document,
-                ", ".join(resume.competencies),
-            )
+            for domain in domains:
+                name = str(domain or "").strip()
+
+                if name:
+                    self._add_bullet(document, name)
 
         self._add_section(document, "Work Experience")
 
@@ -103,6 +112,19 @@ class ResumeExporter:
                     )
                     school_run2.font.size = Pt(10.5)
                     school_run2.font.color.rgb = MUTED
+
+        if candidate.certifications:
+            self._add_section(document, "Certifications")
+
+            for item in candidate.certifications:
+                cert = re.sub(
+                    r"^[\s•\-\u2022*]+",
+                    "",
+                    str(item or ""),
+                ).strip()
+
+                if cert:
+                    self._add_skill_line(document, cert)
 
         path = dest or (
             self.output_dir
@@ -161,33 +183,7 @@ class ResumeExporter:
         run.font.color.rgb = NAVY
         run.font.name = "Calibri"
 
-        contact_parts = [
-            part
-            for part in (
-                candidate.email,
-                candidate.phone,
-                (
-                    candidate.preferred_locations[0]
-                    if candidate.preferred_locations
-                    else None
-                ),
-            )
-            if part
-        ]
-
-        if contact_parts:
-            contact = document.add_paragraph()
-            contact.alignment = (
-                WD_ALIGN_PARAGRAPH.CENTER
-            )
-            contact.paragraph_format.space_after = (
-                Pt(8)
-            )
-            contact_run = contact.add_run(
-                "  ·  ".join(contact_parts)
-            )
-            contact_run.font.size = Pt(10)
-            contact_run.font.color.rgb = MUTED
+        self._add_contact_line(document, candidate)
 
         title = document.add_paragraph()
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -198,6 +194,107 @@ class ResumeExporter:
         title_run.font.color.rgb = MUTED
 
         self._add_rule(document)
+
+    def _add_contact_line(
+        self,
+        document: Document,
+        candidate: CandidateProfile,
+    ) -> None:
+
+        items = []
+
+        if candidate.email:
+            items.append(("text", candidate.email, ""))
+
+        if candidate.phone:
+            items.append(("text", candidate.phone, ""))
+
+        if candidate.preferred_locations:
+            items.append(
+                ("text", candidate.preferred_locations[0], "")
+            )
+
+        if candidate.linkedin:
+            items.append(
+                (
+                    "link",
+                    "LinkedIn",
+                    self._absolute_url(candidate.linkedin),
+                )
+            )
+
+        if candidate.github:
+            items.append(
+                (
+                    "link",
+                    "GitHub",
+                    self._absolute_url(candidate.github),
+                )
+            )
+
+        if not items:
+            return
+
+        contact = document.add_paragraph()
+        contact.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        contact.paragraph_format.space_after = Pt(8)
+
+        for index, (kind, label, url) in enumerate(items):
+            if index:
+                sep = contact.add_run("  ·  ")
+                sep.font.size = Pt(10)
+                sep.font.color.rgb = MUTED
+
+            if kind == "link":
+                self._add_hyperlink(contact, label, url)
+            else:
+                run = contact.add_run(label)
+                run.font.size = Pt(10)
+                run.font.color.rgb = MUTED
+
+    @staticmethod
+    def _absolute_url(value: str) -> str:
+
+        text = str(value or "").strip()
+
+        if text.startswith("http://") or text.startswith("https://"):
+            return text
+
+        return f"https://{text.lstrip('/')}"
+
+    @staticmethod
+    def _add_hyperlink(
+        paragraph,
+        text: str,
+        url: str,
+    ) -> None:
+
+        r_id = paragraph.part.relate_to(
+            url,
+            RT.HYPERLINK,
+            is_external=True,
+        )
+        label = (
+            str(text)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        hyperlink = parse_xml(
+            f'<w:hyperlink {nsdecls("w", "r")} r:id="{r_id}" '
+            f'w:history="1">'
+            f"<w:r>"
+            f"<w:rPr>"
+            f'<w:rStyle w:val="Hyperlink"/>'
+            f'<w:color w:val="0563C1"/>'
+            f'<w:u w:val="single"/>'
+            f'<w:sz w:val="20"/>'
+            f"</w:rPr>"
+            f'<w:t xml:space="preserve">{label}</w:t>'
+            f"</w:r>"
+            f"</w:hyperlink>"
+        )
+        paragraph._p.append(hyperlink)
 
     def _add_section(
         self,
@@ -228,12 +325,44 @@ class ResumeExporter:
         if not skills:
             return
 
-        for offset in range(0, len(skills), 4):
-            chunk = skills[offset:offset + 4]
-            self._add_bullet(
-                document,
-                " | ".join(chunk),
-            )
+        for skill in skills:
+            self._add_skill_line(document, skill)
+
+    def _add_skill_line(
+        self,
+        document: Document,
+        text: str,
+    ) -> None:
+
+        line = str(text or "").strip()
+
+        if not line:
+            return
+
+        paragraph = document.add_paragraph()
+        paragraph.paragraph_format.space_before = Pt(2)
+        paragraph.paragraph_format.space_after = Pt(4)
+        paragraph.paragraph_format.line_spacing = 1.15
+        paragraph.paragraph_format.left_indent = Inches(0)
+
+        label, separator, rest = line.partition(":")
+
+        if separator and rest.strip():
+            head = paragraph.add_run(f"{label.strip()}:")
+            head.bold = True
+            head.font.size = Pt(11)
+            head.font.color.rgb = NAVY
+            head.font.name = "Calibri"
+            body = paragraph.add_run(f" {rest.strip()}")
+            body.font.size = Pt(11)
+            body.font.color.rgb = NAVY
+            body.font.name = "Calibri"
+            return
+
+        run = paragraph.add_run(line)
+        run.font.size = Pt(11)
+        run.font.color.rgb = NAVY
+        run.font.name = "Calibri"
 
     def _add_job_block(
         self,
@@ -264,13 +393,6 @@ class ResumeExporter:
         role_run.font.size = Pt(10.5)
         role_run.font.color.rgb = MUTED
 
-        if block.tools:
-            tools = document.add_paragraph()
-            tools.paragraph_format.space_after = Pt(8)
-            tools_run = tools.add_run(block.tools)
-            tools_run.font.size = Pt(10.5)
-            tools_run.font.color.rgb = MUTED
-
         for bullet in block.bullets:
             self._add_bullet(document, bullet)
 
@@ -280,12 +402,18 @@ class ResumeExporter:
         highlight: str,
     ) -> None:
 
-        name, _, description = highlight.partition(
-            ": "
-        )
+        name, bullets = self._project_parts(highlight)
+        tools = []
+        body = []
 
-        if not description:
-            self._add_bullet(document, highlight)
+        for bullet in bullets:
+            if re.match(r"^(stack|tools)\b", bullet, re.I):
+                tools.append(bullet)
+            else:
+                body.append(bullet)
+
+        if not body and not tools:
+            self._add_bullet(document, name)
             return
 
         header = document.add_paragraph()
@@ -296,7 +424,41 @@ class ResumeExporter:
         run.font.size = Pt(11)
         run.font.color.rgb = NAVY
 
-        self._add_body(document, description)
+        if tools:
+            line = document.add_paragraph()
+            line.paragraph_format.space_after = Pt(8)
+            tools_run = line.add_run(tools[0])
+            tools_run.italic = True
+            tools_run.font.size = Pt(10.5)
+            tools_run.font.color.rgb = MUTED
+
+        for bullet in body:
+            self._add_bullet(document, bullet)
+
+    @staticmethod
+    def _project_parts(
+        highlight: str,
+    ) -> tuple[str, list[str]]:
+
+        text = str(highlight or "").strip()
+
+        if not text:
+            return "", []
+
+        if "\n" in text:
+            lines = [
+                line.strip()
+                for line in text.splitlines()
+                if line.strip()
+            ]
+            return lines[0], lines[1:]
+
+        name, separator, description = text.partition(": ")
+
+        if not separator:
+            return text, []
+
+        return name, project_bullets(description)
 
     def _add_body(
         self,
@@ -332,7 +494,7 @@ class ResumeExporter:
         paragraph.paragraph_format.left_indent = (
             Inches(0.2)
         )
-        run = paragraph.add_run(f"•   {text}")
+        run = paragraph.add_run(f"• {text}")
         run.font.size = Pt(11)
         run.font.color.rgb = NAVY
         run.font.name = "Calibri"

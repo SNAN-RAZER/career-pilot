@@ -183,7 +183,10 @@ Rules:
             if data is None:
                 continue
 
-            last = self._build_requirements(data)
+            last = self._build_requirements(
+                data,
+                cleaned,
+            )
 
             if last.required_skills:
                 return last
@@ -197,7 +200,8 @@ Rules:
 
     @staticmethod
     def _build_requirements(
-        data: dict
+        data: dict,
+        job_text: str = "",
     ) -> JobRequirements:
 
         required_skills = [
@@ -207,7 +211,8 @@ Rules:
                 mandatory=True,
             )
             for skill in JobAnalyzer._clean_skills(
-                data.get("required_skills", [])
+                data.get("required_skills", []),
+                job_text,
             )
         ]
 
@@ -218,7 +223,8 @@ Rules:
                 mandatory=False,
             )
             for skill in JobAnalyzer._clean_skills(
-                data.get("preferred_skills", [])
+                data.get("preferred_skills", []),
+                job_text,
             )
         ]
 
@@ -260,7 +266,7 @@ Rules:
         )
 
     @staticmethod
-    def _clean_skills(raw) -> list[str]:
+    def _clean_skills(raw, job_text: str = "") -> list[str]:
 
         if isinstance(raw, str):
             raw = [raw]
@@ -291,6 +297,12 @@ Rules:
             if JobAnalyzer._is_bad_skill(skill):
                 continue
 
+            if job_text and not JobAnalyzer._mentioned_in_job(
+                skill,
+                job_text,
+            ):
+                continue
+
             skills.append(skill)
 
         return list(dict.fromkeys(skills))
@@ -318,6 +330,29 @@ Rules:
             "job_description",
             "job description",
         }
+
+    @staticmethod
+    def _mentioned_in_job(skill: str, job_text: str) -> bool:
+
+        from app.resume.skill_match import skill_matches_keyword
+
+        haystack = job_text or ""
+
+        if skill_matches_keyword(skill, haystack):
+            return True
+
+        parts = skill.split()
+
+        if len(parts) >= 3:
+            return skill.lower() in haystack.lower()
+
+        if len(parts) == 2:
+            return all(
+                skill_matches_keyword(part, haystack)
+                for part in parts
+            )
+
+        return True
 
     @staticmethod
     def _parse_json(raw: str) -> dict | None:

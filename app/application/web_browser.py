@@ -336,12 +336,32 @@ class PlaywrightBrowser(BrowserSession):
     async def click(self, element_id: str) -> None:
 
         await self._by_id(element_id).click(timeout=5000)
-        await self._page.wait_for_timeout(1500)
+        await self._settle_after_navigation()
 
     async def upload(self, element_id: str, path: str) -> None:
 
         handle = self._by_id(element_id)
         await handle.set_input_files(str(Path(path)))
+
+    async def _settle_after_navigation(self) -> None:
+
+        try:
+            await self._page.wait_for_load_state(
+                "domcontentloaded",
+                timeout=8000,
+            )
+        except Exception:
+            pass
+
+        await self._page.wait_for_timeout(1800)
+
+        try:
+            await self._page.wait_for_load_state(
+                "networkidle",
+                timeout=4000,
+            )
+        except Exception:
+            pass
 
     async def close(self) -> None:
 

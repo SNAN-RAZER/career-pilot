@@ -45,9 +45,6 @@ def persist_recommendation(
     store: ApplicationStore,
     recommendation: ApplicationRecommendation,
 ):
-    if recommendation.recommendation == "REJECT":
-        return
-
     record = ApplicationRecord(
         job=recommendation.job,
         status="PENDING",
@@ -116,7 +113,7 @@ def test_review_recommendation_is_persisted(
     assert application.recommendation == "REVIEW"
 
 
-def test_rejected_recommendation_is_not_persisted(
+def test_rejected_recommendation_is_persisted(
     tmp_path,
 ):
 
@@ -135,8 +132,10 @@ def test_rejected_recommendation_is_not_persisted(
         recommendation,
     )
 
-    assert store.get("3") is None
-    assert store.load() == []
+    stored = store.get("3")
+    assert stored is not None
+    assert stored.recommendation == "REJECT"
+    assert stored.status == "PENDING"
 
 
 def test_repeated_persistence_does_not_duplicate_job(

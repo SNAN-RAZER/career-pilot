@@ -19,8 +19,11 @@ class SemanticMatcher:
         text_b: str,
     ) -> float:
 
-        embedding_a = self.client.embed(text_a)
-        embedding_b = self.client.embed(text_b)
+        try:
+            embedding_a = self.client.embed(text_a)
+            embedding_b = self.client.embed(text_b)
+        except Exception:
+            return self._lexical_similarity(text_a, text_b)
 
         vector_a = np.array(
             embedding_a,
@@ -55,6 +58,20 @@ class SemanticMatcher:
             float(normalized),
             2,
         )
+
+    @staticmethod
+    def _lexical_similarity(text_a: str, text_b: str) -> float:
+
+        tokens_a = set(text_a.lower().split())
+        tokens_b = set(text_b.lower().split())
+
+        if not tokens_a or not tokens_b:
+            return 0.0
+
+        overlap = len(tokens_a & tokens_b)
+        union = len(tokens_a | tokens_b)
+
+        return round(100.0 * overlap / union, 2)
 
     def compare_many(
         self,

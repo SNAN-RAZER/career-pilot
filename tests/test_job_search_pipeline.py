@@ -1,6 +1,8 @@
 from app.matching.decision_engine import DecisionEngine
 from app.matching.job_ranker import JobRanker
 from app.matching.target_matcher import TargetMatcher
+from app.matching.candidate_fit_prefilter import CandidateFitPreFilter
+from tests.job_fit_stubs import keep_non_java_jobs
 from app.models.candidate import CandidateProfile
 from app.models.job import JobPosting
 from app.models.job_evaluation import (
@@ -164,6 +166,9 @@ def test_job_search_pipeline():
         target_matcher=TargetMatcher(),
         decision_engine=DecisionEngine(),
         ranker=JobRanker(),
+        candidate_fit_prefilter=CandidateFitPreFilter(
+            screen=keep_non_java_jobs,
+        ),
     )
 
     result = pipeline.run(

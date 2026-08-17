@@ -241,7 +241,8 @@ def test_agent_thinks_and_clicks_apply():
 
     def think(_prompt):
         assert "Embedded Engineer" in _prompt
-        assert "Think about the page" in _prompt
+        assert "CURRENT PAGE STAGE" in _prompt
+        assert "multi-step" in _prompt.lower() or "AFTER you click" in _prompt
         return (
             '{"thought":"This is a job listing, not a form yet",'
             '"type":"click","element_id":"e0",'
@@ -259,6 +260,70 @@ def test_agent_thinks_and_clicks_apply():
     assert action.type == "click"
     assert action.element_id == "e0"
     assert "listing" in action.thought.lower()
+
+
+def test_llm_done_on_listing_still_clicks_apply():
+
+    packet = build_applicant_packet(_candidate())
+    page = PageSnapshot(
+        url="https://careers.example.com/job/1",
+        title="Embedded Engineer",
+        text="We are hiring. Apply now.",
+        elements=[
+            PageElement(
+                id="e0",
+                tag="button",
+                text="Apply now",
+            )
+        ],
+    )
+
+    def think(_prompt):
+        return (
+            '{"thought":"No form fields visible",'
+            '"type":"done","element_id":"",'
+            '"reason":"Nothing to fill"}'
+        )
+
+    action = plan_next_action(
+        page,
+        packet,
+        set(),
+        think=think,
+        goal={"title": "Embedded Engineer", "company": "Acme"},
+    )
+
+    assert action.type == "click"
+    assert action.element_id == "e0"
+
+
+def test_page_stage_listing_then_form():
+
+    from app.application.web_apply_planner import (
+        classify_page_stage,
+    )
+
+    listing = PageSnapshot(
+        url="https://careers.example.com/job/1",
+        title="Role",
+        text="Apply now to join us",
+        elements=[
+            PageElement(id="e0", tag="button", text="Apply now"),
+        ],
+    )
+    form = PageSnapshot(
+        url="https://careers.example.com/apply",
+        title="Application",
+        text="Please complete the form",
+        elements=[
+            PageElement(id="e0", label="Email", type="email"),
+            PageElement(id="e1", label="Phone", type="tel"),
+            PageElement(id="e2", type="file", label="Resume"),
+        ],
+    )
+
+    assert classify_page_stage(listing) in {"listing", "gate"}
+    assert classify_page_stage(form) == "form"
 
 
 def test_planner_does_not_search_naukri_again():
@@ -390,6 +455,54 @@ def test_planner_skips_salary_and_does_not_submit_by_default():
     action = plan_next_action(page, packet, set(), allow_submit=False)
 
     assert action.type == "done"
+
+
+def test_agent_clicks_apply_then_fills_form():
+
+    browser = FakeBrowser(
+        [
+            PageSnapshot(
+                url="https://careers.example.com/job/1",
+                title="Software Developer",
+                text="Apply now",
+                elements=[
+                    PageElement(
+                        id="e0",
+                        tag="button",
+                        text="Apply now",
+                    ),
+                ],
+            ),
+            PageSnapshot(
+                url="https://careers.example.com/apply",
+                title="Application",
+                text="Complete your application",
+                elements=[
+                    PageElement(id="e0", label="Email", type="email"),
+                    PageElement(id="e1", label="Phone"),
+                    PageElement(id="e2", type="file", label="Resume"),
+                ],
+            ),
+        ]
+    )
+    report = run_async(
+        WebApplyAgent(browser=browser).run(
+            "https://careers.example.com/job/1",
+            _candidate(),
+            resume_path="/tmp/resume.docx",
+            allow_submit=False,
+            job_title="Software Developer",
+            company="Acme",
+        )
+    )
+
+    assert browser.clicks == ["e0"]
+    assert browser.fills["e0"] == "nayaabahmedn@gmail.com"
+    assert browser.fills["e1"] == "8197718054"
+    assert browser.uploads == ["/tmp/resume.docx"]
+    assert report.status == "filled"
+    assert "gate" in report.stages or "listing" in report.stages
+    assert "form" in report.stages
 
 
 def test_agent_fills_form_and_uploads_resume():

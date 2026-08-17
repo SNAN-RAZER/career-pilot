@@ -82,7 +82,10 @@ def duration_label(
     return " ".join(parts)
 
 
-def tools_line(technologies: list[str]) -> str:
+def tools_line(
+    technologies: list[str],
+    counted: bool = True,
+) -> str:
 
     unique = []
     seen = set()
@@ -99,7 +102,10 @@ def tools_line(technologies: list[str]) -> str:
     if not unique:
         return ""
 
-    return (
+    prefix = (
         f"Tools ({len(unique)}): "
-        + ", ".join(unique)
+        if counted
+        else "Tools: "
     )
+
+    return prefix + ", ".join(unique)

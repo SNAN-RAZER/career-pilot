@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class EvidenceJudgment(BaseModel):
@@ -19,3 +19,17 @@ class EvidenceJudgment(BaseModel):
     ]
 
     reason: str
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def scale_percent_confidence(cls, value):
+
+        if value is None or value == "":
+            return 0.0
+
+        number = float(value)
+
+        if number > 1.0:
+            number = number / 100.0
+
+        return max(0.0, min(1.0, number))

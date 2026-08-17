@@ -26,11 +26,19 @@ def make_recommendation(
         source="test",
     )
 
+    recommendation = (
+        "REJECT"
+        if next_action == "REJECT"
+        else "REVIEW"
+        if next_action == "REVIEW"
+        else "APPLY"
+    )
+
     return ApplicationRecommendation(
         job=job,
         match_score=90.0,
         eligibility_score=90.0,
-        recommendation="APPLY",
+        recommendation=recommendation,
         next_action=next_action,
     )
 
@@ -82,7 +90,7 @@ def test_workflow_enqueues_rejected_recommendation():
     assert result is not None
     assert result.status == "PENDING"
     assert (
-        result.recommendation.next_action
+        result.recommendation.recommendation
         == "REJECT"
     )
     assert len(queue.get_all()) == 1
