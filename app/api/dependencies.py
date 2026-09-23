@@ -74,6 +74,7 @@ class ApplicationDependencies:
 
         self._naukri_client = None
         self._job_search_pipeline = None
+        self.workflow.apply_agent._client = None
 
     def get_naukri_client(self):
 

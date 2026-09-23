@@ -13,3 +13,12 @@ data/applications.json
 data/browser/
 data/llm/settings.json
 third_party/NopeRi/
+
+.venv-local/
+work/
+career-pilot-web/dist-local/
+node_modules/
+data/profile/
+data/qdrant/
+data/*.sqlite3*
+data/agent-run.json

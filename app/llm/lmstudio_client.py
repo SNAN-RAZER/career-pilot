@@ -147,7 +147,7 @@ class LMStudioClient:
                     f"{root}{path}",
                     json={
                         "model": model,
-                        "prompt": text,
+                        ("input" if path == "/api/embed" else "prompt"): text,
                     },
                     timeout=300,
                 )

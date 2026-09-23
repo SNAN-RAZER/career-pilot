@@ -1,4 +1,5 @@
 import json
+import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
@@ -108,39 +109,33 @@ def parse_resume(
 
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
 
+    from app.llm.lmstudio_client import LMStudioClient
+    if not LMStudioClient().reachable():
+        raise HTTPException(400, "Start your model server and test models in Agent settings before parsing a resume.")
+    content = resume_file.file.read(10 * 1024 * 1024 + 1)
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(413, "Choose a resume smaller than 10 MB.")
+    dest = PROFILE_DIR / f"{SOURCE_STEM}{suffix}"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False, dir=PROFILE_DIR) as staged:
+        staged.write(content)
+        staged_path = Path(staged.name)
+    try:
+        text = extract_resume_text(staged_path)
+        if not text.strip():
+            raise HTTPException(400, "Could not extract text from that file.")
+        facts, meta = ResumeIngestor().parse_for_preview(text)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, f"Resume parsing failed ({type(exc).__name__}). Check your model settings and try again. Your saved profile has been preserved.") from exc
+    finally:
+        staged_path.unlink(missing_ok=True)
+    # Only replace the source after successful extraction and model parsing.
     for old in PROFILE_DIR.glob(f"{SOURCE_STEM}.*"):
         if old.suffix.lower() != ".json":
             old.unlink()
-
-    dest = PROFILE_DIR / f"{SOURCE_STEM}{suffix}"
-    dest.write_bytes(resume_file.file.read())
-    text = extract_resume_text(dest)
-
-    if not text.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Could not extract text from that file.",
-        )
-
-    (
-        PROFILE_DIR / f"{SOURCE_STEM}.txt"
-    ).write_text(text, encoding="utf-8")
-
-    try:
-        facts, meta = ResumeIngestor().parse_for_preview(
-            text
-        )
-    except RuntimeError as exc:
-        message = str(exc)
-        status = (
-            400
-            if "chat model" in message.lower()
-            else 502
-        )
-        raise HTTPException(
-            status_code=status,
-            detail=message,
-        ) from exc
+    dest.write_bytes(content)
+    (PROFILE_DIR / f"{SOURCE_STEM}.txt").write_text(text, encoding="utf-8")
 
     PREVIEW_PATH.write_text(
         json.dumps(facts, indent=2, ensure_ascii=False),

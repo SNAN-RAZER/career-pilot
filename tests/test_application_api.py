@@ -1,4 +1,5 @@
 from uuid import uuid4
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -9,6 +10,19 @@ from app.api.dependencies import (
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_workspace(tmp_path, monkeypatch):
+    from app.api.dependencies import ApplicationDependencies
+    from app.api import applications
+    from app.models.candidate import CandidateProfile
+    fresh = ApplicationDependencies(store_path=str(tmp_path / 'applications.json'))
+    for name, value in vars(fresh).items():
+        monkeypatch.setattr(application_dependencies, name, value)
+    monkeypatch.setattr(applications, '_load_candidate', lambda: CandidateProfile(
+        name='Test Candidate', skills=['Python', 'RAG', 'LLM', 'LangChain'],
+        professional_summary='Python developer building RAG applications.'))
 
 
 def test_get_applications():

@@ -1,3 +1,25 @@
+# Run the complete local workspace (Windows)
+
+Double-click **Start Career Pilot.cmd** in this folder. First launch installs missing Python packages, downloads the Naukri client, builds the frontend, and opens **http://127.0.0.1:8765**. Requires Python 3.12+, Node.js 22+, Git, and internet for installation. Keep the server window open while the agent runs.
+
+1. Start Ollama or LM Studio.
+2. In **Agent settings**, select your provider, load model IDs, choose a chat model and an embedding model, then **Save & test models**.
+3. Save your Naukri credentials and click **Test login**. Complete any verification on Naukri if requested.
+4. Upload your resume, review its extracted facts, and save the profile.
+5. Set target roles, location, match threshold, and application limit. **Run agent** prepares resumes by default. Enable automatic submission in preferences to submit qualifying Naukri Easy Apply applications.
+
+Runs continue in the local server after closing the browser tab. Reopening restores run activity. Pausing finishes the current action first. Restarting never resumes interrupted applications automatically.
+
+Naukri Easy Apply uses the resume saved in your Naukri account; keep it current. Tailored resumes can be downloaded. External employer forms are prepared for review and are not reported as submitted. Screening questions, MFA, and blocked pages require your attention.
+
+Resumes, provider settings, credentials, and submission history are local and excluded from Git. Keys are never returned to the browser. The server binds only to loopback. The separately hosted preview does not run this local agent.
+
+If installation fails, the launcher keeps its window open with the error. If submission is interrupted, review employer/Naukri history before retrying; uncertain attempts are blocked to prevent duplicates.
+
+Tests: `python -m pytest tests/test_local_workspace.py tests/test_bulk_apply.py tests/test_llm_providers.py tests/test_model_catalog.py tests/test_source_document.py`. Set `CAREER_PILOT_LIVE_MODEL_TEST=1` to run `tests/test_live_local_model.py` against a live model. This test uses synthetic data and never submits applications.
+
+---
+
 # Career-Pilot
 
 AI-powered job search and application management. Combines resume matching, Naukri job discovery, and an application workflow dashboard.

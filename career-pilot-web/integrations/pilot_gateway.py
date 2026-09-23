@@ -55,7 +55,7 @@ class PilotGateway:
             return await JSONResponse({"detail": "Agent authentication required."}, status_code=401)(scope, receive, send)
         path = scope.get("path", "")
         method = scope.get("method", "GET")
-        mutation = method not in ("GET", "HEAD", "OPTIONS")
+        mutation = method not in ("GET", "HEAD", "OPTIONS") and not path.startswith('/runs/')
         # Submission routes are deliberately restricted to the guarded action.
         if mutation and re.fullmatch(r"/applications/(bulk-apply|[^/]+/(apply|web-apply|company-apply))", path):
             return await JSONResponse({"detail": "Use the guarded auto-apply action."}, status_code=403)(scope, receive, send)
@@ -111,6 +111,8 @@ class PilotGateway:
                     if remembered and entry.get("status") == "PENDING":
                         entry["status"] = remembered[0] if remembered[0] in ("APPLIED", "PREPARED") else "NEEDS_REVIEW"
                         entry["apply_message"] = json.loads(remembered[1]).get("detail", "A previous attempt needs review.")
+                    elif entry.get("status") == "PENDING" and entry.get("tailored_summary"):
+                        entry["status"] = "PREPARED"
                 raw = json.dumps(data).encode()
             response_headers = {k.decode(): v.decode() for k, v in (start or {}).get("headers", []) if k.lower() not in (b"content-length", b"transfer-encoding")}
             response_headers["cache-control"] = "no-store"

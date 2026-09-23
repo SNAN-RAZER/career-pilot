@@ -24,6 +24,7 @@ class BulkApplyItem(BaseModel):
 class BulkApplyReport(BaseModel):
 
     min_match: float
+    prepared: list[BulkApplyItem] = Field(default_factory=list)
     applied: list[BulkApplyItem] = Field(
         default_factory=list
     )
@@ -192,7 +193,7 @@ async def apply_one_job(
             detail = await _call(fallback, job_id)
             return _item_from(
                 item,
-                "applied",
+                "prepared" if "filled" in str(detail).lower() or "prepared" in str(detail).lower() else "applied",
                 (
                     "Fallback after Easy Apply failed "
                     f"({easy_exc}): {detail}"
@@ -224,6 +225,7 @@ async def run_bulk_apply(
         min_match=floor,
     )
     applied = []
+    prepared = []
     failed = []
 
     for item in selected:
@@ -236,6 +238,8 @@ async def run_bulk_apply(
 
         if result.status == "applied":
             applied.append(result)
+        elif result.status == "prepared":
+            prepared.append(result)
         elif result.status == "failed":
             failed.append(result)
         else:
@@ -244,7 +248,7 @@ async def run_bulk_apply(
     message = (
         f"Tried {len(selected)} qualified job(s) "
         f"(match ≥ {floor:.0f}%, APPLY). "
-        f"Applied {len(applied)}, skipped {len(skipped)}, "
+        f"Applied {len(applied)}, prepared {len(prepared)}, skipped {len(skipped)}, "
         f"failed {len(failed)}. "
         "One failure never stops the rest."
     )
@@ -252,6 +256,7 @@ async def run_bulk_apply(
     return BulkApplyReport(
         min_match=floor,
         applied=applied,
+        prepared=prepared,
         skipped=skipped,
         failed=failed,
         message=message,

@@ -153,7 +153,8 @@ def test_fallback_runs_when_easy_apply_is_blocked():
 
     assert fallback_ids == ["external"]
     applied = {item.job_id for item in report.applied}
-    assert applied == {"external", "easy"}
+    assert applied == {"easy"}
+    assert {item.job_id for item in report.prepared} == {"external"}
 
 
 def test_failed_fallback_still_applies_next_job():

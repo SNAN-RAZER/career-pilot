@@ -25,19 +25,11 @@ CHROME_PROFILE = os.getenv(
 APPLY_PROFILE = Path(
     os.getenv(
         "CAREER_PILOT_CHROME_PROFILE",
-        str(Path.home() / ".career-pilot" / "chrome-apply"),
+        str(Path("data/browser/chrome-apply").resolve()),
     )
 )
 
-SEED_PATHS = [
-    "Local State",
-    "Default/Preferences",
-    "Default/Secure Preferences",
-    "Default/Cookies",
-    "Default/Login Data",
-    "Default/Web Data",
-    "Default/Network/Cookies",
-]
+
 
 
 def chrome_user_data_dir() -> Path:
@@ -63,10 +55,13 @@ def chrome_binary() -> str:
         if found:
             return found
 
-    raise RuntimeError(
-        "Google Chrome is not installed. "
-        "Install google-chrome-stable."
-    )
+    for root in (os.getenv("PROGRAMFILES"), os.getenv("PROGRAMFILES(X86)"), os.getenv("LOCALAPPDATA")):
+        if root:
+            for relative in ("Google/Chrome/Application/chrome.exe", "Microsoft/Edge/Application/msedge.exe"):
+                candidate = Path(root) / relative
+                if candidate.is_file():
+                    return str(candidate)
+    raise RuntimeError("Install Google Chrome or Microsoft Edge to use browser-assisted applications.")
 
 
 def chrome_is_locked(user_data_dir: Path | None = None) -> bool:
@@ -115,45 +110,8 @@ def seed_apply_profile() -> Path:
 
     dest = apply_profile_dir()
     dest.mkdir(parents=True, exist_ok=True)
-    marker = dest / "Default" / "Preferences"
-
-    if marker.exists():
-        return dest
-
-    source = chrome_user_data_dir()
-
-    if not source.exists():
-        return dest
-
-    for relative in SEED_PATHS:
-        src = source / relative
-        target = dest / relative
-
-        if not src.exists():
-            continue
-
-        target.parent.mkdir(parents=True, exist_ok=True)
-
-        try:
-            shutil.copy2(src, target)
-        except OSError:
-            continue
-
-    for folder in (
-        "Default/Local Storage",
-        "Default/Session Storage",
-        "Default/Sessions",
-    ):
-        src = source / folder
-        target = dest / folder
-
-        if src.exists() and not target.exists():
-            try:
-                shutil.copytree(src, target, dirs_exist_ok=True)
-            except OSError:
-                continue
-
     return dest
+
 
 
 def start_debug_chrome() -> None:
@@ -214,7 +172,7 @@ def profile_in_use_message() -> str:
 
     return (
         "Career-Pilot opens its own Chrome window with "
-        "debugging so it can use saved Google logins. "
+        "debugging. Sign in there when requested. "
         "Your everyday Chrome can stay open. If attach "
         "fails, run:\n\n"
         f"{chrome_debug_command()}\n\n"

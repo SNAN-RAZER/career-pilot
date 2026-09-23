@@ -99,6 +99,11 @@ def activate_provider(payload: ActivatePayload):
             detail=str(exc),
         ) from exc
 
+    from app.api.dependencies import application_dependencies
+    from app.resume.resume_agent import ResumeAgent
+    application_dependencies.resume_agent = ResumeAgent()
+    application_dependencies._job_search_pipeline = None
+
     return {
         "status": "active",
         "active": public_provider(record),
@@ -146,18 +151,6 @@ def list_provider_models(provider_id: str):
             status_code=502,
             detail=f"Could not list models: {exc}",
         ) from exc
-
-    if (
-        not (record.get("embedding_model") or "").strip()
-        and embedding_models
-    ):
-        try:
-            record = set_active(
-                provider_id,
-                embedding_model=embedding_models[0],
-            )
-        except ValueError:
-            pass
 
     return {
         "id": provider_id,

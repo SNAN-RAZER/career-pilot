@@ -79,10 +79,11 @@ def _candidate() -> CandidateProfile:
     )
 
 
-def test_chrome_lock_explains_how_to_reuse_logins(tmp_path):
+def test_chrome_lock_explains_how_to_reuse_logins(tmp_path, monkeypatch):
 
     lock = tmp_path / "SingletonLock"
-    lock.symlink_to("/tmp")
+    lock.touch()
+    monkeypatch.setattr('app.application.web_chrome.chrome_binary', lambda: 'chrome')
 
     assert chrome_is_locked(tmp_path)
     assert "remote-debugging-port" in profile_in_use_message()
