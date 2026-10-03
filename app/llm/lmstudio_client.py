@@ -236,7 +236,7 @@ class LMStudioClient:
         max_tokens: int,
     ) -> str:
 
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.llm_model,
             "messages": messages,
             "temperature": temperature,
@@ -245,6 +245,11 @@ class LMStudioClient:
             "tool_choice": "none",
             "tools": [],
         }
+
+        # Qwen3 and similar Ollama models spend tokens on hidden reasoning;
+        # disable that so short replies still return usable content.
+        if self.kind == "ollama":
+            payload["think"] = False
 
         if response_schema is not None:
             payload["response_format"] = {
@@ -286,6 +291,10 @@ class LMStudioClient:
         data = response.json()
         message = data["choices"][0]["message"]
         content = message.get("content")
+        if not content:
+            content = message.get("reasoning") or message.get(
+                "reasoning_content"
+            )
 
         if not content:
             raise RuntimeError(

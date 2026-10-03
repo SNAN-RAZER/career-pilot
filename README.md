@@ -1,6 +1,9 @@
-# Run the complete local workspace (Windows)
+# Run the complete local workspace
 
-Double-click **Start Career Pilot.cmd** in this folder. First launch installs missing Python packages, downloads the Naukri client, builds the frontend, and opens **http://127.0.0.1:8765**. Requires Python 3.12+, Node.js 22+, Git, and internet for installation. Keep the server window open while the agent runs.
+**Linux / macOS:** run `./start-career-pilot.sh` from this folder.
+**Windows:** double-click **Start Career Pilot.cmd**.
+
+First launch installs missing Python packages, downloads the Naukri client, builds the frontend, and opens **http://127.0.0.1:8765**. Requires Python 3.13+, Node.js 22+, Git, and internet for installation. Keep the server window open while the agent runs.
 
 1. Start Ollama or LM Studio.
 2. In **Agent settings**, select your provider, load model IDs, choose a chat model and an embedding model, then **Save & test models**.

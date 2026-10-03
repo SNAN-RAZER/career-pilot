@@ -46,7 +46,7 @@ def save_account(payload: Account):
 def test_account():
     missing = missing_dependencies()
     if missing:
-        raise HTTPException(400, 'Missing packages: ' + ', '.join(missing) + '. Double-click Start Career Pilot.cmd to install them.')
+        raise HTTPException(400, 'Missing packages: ' + ', '.join(missing) + '. Run ./start-career-pilot.sh (or Start Career Pilot.cmd on Windows) to install them.')
     try:
         application_dependencies.reset_naukri_client()
         application_dependencies.get_naukri_client()
@@ -63,7 +63,7 @@ def test_model():
     if not client.llm_model or not client.embedding_model:
         raise HTTPException(400, 'Select both a chat model and an embedding model, then save.')
     try:
-        reply = client.chat([{'role': 'user', 'content': 'Reply with OK.'}], max_tokens=64)
+        reply = client.chat([{'role': 'user', 'content': 'Reply with OK.'}], max_tokens=256)
         if not reply.strip():
             raise ValueError('Chat model returned an empty response.')
         vector = client.embed('Career Pilot connection test')

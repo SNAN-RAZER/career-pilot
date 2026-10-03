@@ -98,3 +98,18 @@ def test_worker_marks_failure_instead_of_claiming_completion(monkeypatch):
     monkeypatch.setattr(pilot_gateway, 'app', fake)
     asyncio.run(runs.execute(runs.RunRequest(roles='Engineer')))
     assert runs.state['status'] == 'failed'
+
+
+def test_worker_times_out_a_stalled_search_and_marks_run_failed(monkeypatch):
+    fake = FastAPI()
+
+    @fake.post('/jobs/search')
+    async def stalled_search():
+        await asyncio.sleep(0.05)
+        return {'applications_queued': 0}
+
+    monkeypatch.setattr(pilot_gateway, 'app', fake)
+    monkeypatch.setattr(runs, 'SEARCH_TIMEOUT_SECONDS', 0.001)
+    asyncio.run(runs.execute(runs.RunRequest(roles='Engineer')))
+    assert runs.state['status'] == 'failed'
+    assert 'timed out' in runs.state['message']

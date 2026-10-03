@@ -1,6 +1,11 @@
 export type Job = { id:string; company:string; title:string; location:string; salary:string; match:number; eligibility?:number; color:string; mark:string; tags:string[]; status?:string; recommendation?:string; reasons?:string[]; missing?:string[]; summary?:string; url?:string; ats?:number; message?:string };
 export type Preferences = { roles:string; location:string; experience:number; minMatch:number; limit:number; autoApply:boolean };
-export const defaultPreferences:Preferences={roles:"Frontend Engineer, Software Engineer",location:"",experience:2,minMatch:85,limit:5,autoApply:false};
+export const defaultPreferences:Preferences={roles:"Embedded Software Engineer, Python Automation Engineer, AI Engineer",location:"",experience:6,minMatch:85,limit:5,autoApply:false};
+export const sampleJobs:Job[]=[
+ {id:"sample-northstar-platform",company:"Northstar Labs",title:"Software Engineer, Platform",location:"Remote · United States",salary:"$125k–$160k",match:94,eligibility:92,color:"#365cdd",mark:"N",tags:["Python","Distributed systems","AWS"],recommendation:"APPLY",reasons:["Builds on Python and cloud infrastructure experience.","Role emphasizes platform reliability and automation."],missing:["No salary or work authorization information has been verified."]},
+ {id:"sample-verdant-ai",company:"Verdant AI",title:"AI Engineer",location:"Hybrid · New York, NY",salary:"$135k–$175k",match:89,eligibility:87,color:"#22876b",mark:"V",tags:["Python","Machine learning","APIs"],recommendation:"APPLY",reasons:["Strong overlap with Python and applied AI skills.","Opportunity includes production API development."],missing:["Confirm location and experience requirements with the employer."]},
+ {id:"sample-summit-automation",company:"Summit Systems",title:"Automation Engineer",location:"Remote · United States",salary:"$110k–$145k",match:83,eligibility:80,color:"#bd7732",mark:"S",tags:["Python","Automation","CI/CD"],recommendation:"REVIEW",reasons:["Automation and scripting experience are relevant.","The sample match is for demonstration only."],missing:["Verify required qualifications and application details."]}
+];
 export function normalizeJob(a:Record<string,unknown>):Job {
  const strings=(v:unknown)=>Array.isArray(v)?v.filter((x):x is string=>typeof x==="string"):[];
  const score=(v:unknown)=>Math.max(0,Math.min(100,Number(v)||0));

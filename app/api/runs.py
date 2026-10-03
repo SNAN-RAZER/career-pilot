@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(prefix='/runs', tags=['runs'])
 STATE_FILE = Path('data/agent-run.json')
+SEARCH_TIMEOUT_SECONDS = 90
 lock = threading.RLock()
 stop = threading.Event()
 state = {'status': 'idle', 'message': '', 'events': []}
@@ -90,7 +91,7 @@ def start(payload: RunRequest):
 async def execute(p):
     from pilot_gateway import app, TOKEN, outcome
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://agent',
-                               headers={'Authorization': 'Bearer ' + TOKEN}, timeout=None) as client:
+                               headers={'Authorization': 'Bearer ' + TOKEN}, timeout=SEARCH_TIMEOUT_SECONDS) as client:
         async def request(path, body=None):
             response = await client.request('POST' if body is not None else 'GET', path, json=body)
             if response.is_error:
@@ -101,8 +102,12 @@ async def execute(p):
                 raise RuntimeError(str(detail))
             return response.json()
         try:
-            await request('/jobs/search', {'queries': [s.strip() for s in p.roles.split(',') if s.strip()],
-                'location': p.location, 'experience': p.experience, 'pages': 1, 'job_age': 7})
+            save('Searching for matching jobs…')
+            try:
+                await asyncio.wait_for(request('/jobs/search', {'queries': [s.strip() for s in p.roles.split(',') if s.strip()],
+                    'location': p.location, 'experience': p.experience, 'pages': 1, 'job_age': 7}), timeout=SEARCH_TIMEOUT_SECONDS)
+            except asyncio.TimeoutError as exc:
+                raise RuntimeError(f'Job search timed out after {SEARCH_TIMEOUT_SECONDS} seconds. Check the job-board connection and try again.') from exc
             jobs = await request('/applications')
             eligible = sorted((j for j in jobs if j['status'] in (('PENDING', 'PREPARED') if p.autoApply else ('PENDING',)) and j['recommendation'] == 'APPLY'
                 and j['match_score'] >= p.minMatch and j['eligibility_score'] >= p.minMatch),
